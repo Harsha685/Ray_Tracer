@@ -1,6 +1,6 @@
 
 #include <iostream>
-#include "vec3.h"
+#include "common.h"
 
 int main() {
     vector3 v1(1, 2, 3);
