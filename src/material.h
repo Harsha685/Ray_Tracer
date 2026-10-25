@@ -8,8 +8,7 @@ class material {
     virtual ~material() = default;
 
     // Default: the ray is absorbed (no bounce)
-    virtual bool scatter(const ray& /*r_in*/, const hit_record& /*rec*/,
-                         color& /*attenuation*/, ray& /*scattered*/) const {
+    virtual bool scatter(const ray& /*r_in*/, const hit_record& /*rec*/,color& /*attenuation*/, ray& /*scattered*/) const {
         return false;
     }
 };
@@ -18,8 +17,7 @@ class lambertian : public material {
   public:
     lambertian(const color& albedo) : albedo(albedo) {}
 
-    bool scatter(const ray& /*r_in*/, const hit_record& rec,
-                 color& attenuation, ray& scattered) const override {
+    bool scatter(const ray& /*r_in*/, const hit_record& rec, color& attenuation, ray& scattered) const override {
         auto scatter_direction = rec.normal + random_unit_vector();
 
         // If the random vector almost cancels the normal, use the normal instead
@@ -27,6 +25,21 @@ class lambertian : public material {
             scatter_direction = rec.normal;
 
         scattered = ray(rec.point, scatter_direction);
+        attenuation = albedo;
+        return true;
+    }
+
+  private:
+    color albedo;
+};
+
+class metal : public material {
+  public:
+    metal(const color& albedo) : albedo(albedo) {}
+
+    bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered) const override {
+        vector3 reflected = reflect(r_in.direction(), rec.normal);
+        scattered = ray(rec.point, reflected);
         attenuation = albedo;
         return true;
     }

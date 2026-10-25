@@ -114,12 +114,9 @@ class camera {
         if (world.hit(r, interval(0.001, infinity), rec)) {
             ray scattered;
             color attenuation;
-
-            // Ask the surface's material how the ray bounces and how much light it keeps
             if (rec.mat->scatter(r, rec, attenuation, scattered))
-                return attenuation * ray_color(scattered, depth - 1, world);
-
-            return color(0, 0, 0);  // The material absorbed the ray
+                return attenuation * ray_color(scattered, depth-1, world);
+            return color(0,0,0);
         }
 
         vector3 unit_direction = unit_vector(r.direction());

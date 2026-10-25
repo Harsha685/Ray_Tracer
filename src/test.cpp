@@ -36,8 +36,10 @@ int main() {
     double ball_radius = 0.5;
 
     hittable_list world;
-    world.add(make_shared<sphere>(ball_center, ball_radius));
-    world.add(make_shared<sphere>(point3(0, -100.5, -1), 100));  // Ground: huge sphere whose top is at y = -0.5
+    auto ground_mat = make_shared<lambertian>(color(0.5, 0.5, 0.5));
+    auto ball_mat   = make_shared<lambertian>(color(0.5, 0.5, 0.5));
+    world.add(make_shared<sphere>(ball_center, ball_radius, ball_mat));
+    world.add(make_shared<sphere>(point3(0, -100.5, -1), 100, ground_mat));  // Ground: huge sphere whose top is at y = -0.5
 
     std::cout << std::fixed << std::setprecision(3);
     std::cout << "row  | object | t     | hit point             | normal                | rgb\n";
