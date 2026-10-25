@@ -9,8 +9,8 @@ int main(){
 
     //world
     hittable_list world;
-    auto ground_mat = make_shared<lambertian>(color(0.5, 0.5, 0.5));
-    auto ball_mat1   = make_shared<metal>(color(0.5, 0.5, 0.5));
+    auto ground_mat = make_shared<lambertian>(color(0.9, 0.6, 0.0));
+    auto ball_mat1   = make_shared<metal>(color(0.5, 0.5, 0.5),0.3);
     auto ball_mat2   = make_shared<lambertian>(color(0.5, 0.5, 0.5));
 
     world.add(make_shared<sphere>(point3(-1, 0.0, -1), 0.5, ball_mat1));
