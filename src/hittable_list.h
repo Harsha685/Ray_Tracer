@@ -4,7 +4,6 @@
 
 #include "hittable.h"
 #include "common.h"
-
 #include <vector>
 
 class hittable_list : public hittable {
