@@ -1,4 +1,3 @@
-
 #ifndef HITTABLE_LIST_H
 #define HITTABLE_LIST_H
 
@@ -6,25 +5,39 @@
 #include "common.h"
 #include <vector>
 
+// A collection of hittable objects that itself behaves like a single hittable.
+// The renderer can treat the whole scene ("world") as one object.
 class hittable_list : public hittable {
     public:
-        std::vector<std::shared_ptr<hittable>> objects;
+        std::vector<shared_ptr<hittable>> objects;
 
+        // Creates an empty list.
         hittable_list() {}
+
+        // Creates a list that starts with a single object.
         hittable_list(shared_ptr<hittable> obj) {add(obj);}
 
+        // Removes every object from the list.
         void clear(){
             objects.clear();
         }
 
+        // Appends an object to the list. shared_ptr is used so the same object can be
+        // shared by several lists and is freed automatically when nothing uses it.
         void add(shared_ptr<hittable> obj){
             objects.push_back(obj);
         }
 
+        // Finds the closest object the ray hits within ray_t.
+        //
+        // Every object is tested, but the upper bound of the allowed range shrinks to the t
+        // of the nearest hit found so far. That way a later object only counts if it is
+        // closer than everything before it, so rec ends up describing the visible
+        // (frontmost) surface. Returns true if at least one object was hit.
         bool hit(const ray& r, interval ray_t, hit_record& rec) const override{
             hit_record temp_rec;
             bool hit_any = false;
-            double closest = ray_t.max;
+            double closest = ray_t.max;  // t of the nearest hit so far; later hits must be closer than this
             for (const auto& object : objects) {
                 if(object->hit(r, interval(ray_t.min, closest), temp_rec)){
                     hit_any = true;

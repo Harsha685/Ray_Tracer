@@ -6,15 +6,26 @@
 
 class sphere : public hittable {
 public:
+    // Creates a sphere with the given center and radius. A negative radius makes no
+    // sense, so it is clamped to 0 with std::fmax.
     sphere(const point3& center, double radius)
         : center(center), radius(std::fmax(0, radius)) {}
 
+    // Tests whether ray r hits this sphere at some t strictly inside ray_t.
+    //
+    // A point P is on the sphere when |P - center|^2 = radius^2. Substituting the ray
+    // P(t) = origin + t * direction gives a quadratic in t. Its discriminant tells us how
+    // many intersections there are: negative = the ray misses, zero = it grazes the
+    // surface, positive = it enters and exits. We take the smaller valid root (the nearer
+    // hit) and only fall back to the larger one if the smaller is outside ray_t (e.g. the
+    // ray starts inside the sphere). On a hit, rec gets t, the hit point, and the normal.
     bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
         // 1. Calculate oc, a, h, and c
-        vector3 oc = center - r.origin();
-        auto a = r.direction().length_squared();
-        auto h = dot(r.direction(), oc);
-        auto c = oc.length_squared() - radius * radius;
+        // Solves the quadratic a*t^2 - 2h*t + c = 0 for where the ray meets the sphere
+        vector3 oc = center - r.origin();                // Vector from ray origin to sphere center
+        auto a = r.direction().length_squared();         // Quadratic 'a' coefficient
+        auto h = dot(r.direction(), oc);                 // Half of the quadratic 'b' coefficient (b = -2h)
+        auto c = oc.length_squared() - radius * radius;  // Quadratic 'c' coefficient
 
         // 2. Calculate the discriminant
         auto discriminant = h * h - a * c;
@@ -25,7 +36,7 @@ public:
         auto sqrt_d = std::sqrt(discriminant);
 
         // 4. Find the nearest root inside the allowed range
-        auto root = (h - sqrt_d) / a;
+        auto root = (h - sqrt_d) / a;  // Candidate t value; try the nearer intersection first
         if (!ray_t.surrounds(root)) {
             root = (h + sqrt_d) / a;
             if (!ray_t.surrounds(root))
@@ -35,7 +46,7 @@ public:
         // 5. Fill the hit record
         rec.t = root;
         rec.point = r.at(rec.t);
-        vector3 outward_normal = (rec.point - center) / radius;
+        vector3 outward_normal = (rec.point - center) / radius;  // Dividing by radius makes it unit length
         rec.set_face_normal(r, outward_normal);
 
         // 6. Report a successful hit
