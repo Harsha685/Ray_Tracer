@@ -3,13 +3,13 @@
 
 #include "common.h"
 #include "hittable.h"
-
+#include "material.h"
 class sphere : public hittable {
 public:
     // Creates a sphere with the given center and radius. A negative radius makes no
     // sense, so it is clamped to 0 with std::fmax.
-    sphere(const point3& center, double radius)
-        : center(center), radius(std::fmax(0, radius)) {}
+    sphere(const point3& center, double radius, shared_ptr<material> mat)
+    : center(center), radius(std::fmax(0, radius)), mat(mat) {}
 
     // Tests whether ray r hits this sphere at some t strictly inside ray_t.
     //
@@ -49,6 +49,7 @@ public:
         vector3 outward_normal = (rec.point - center) / radius;  // Dividing by radius makes it unit length
         rec.set_face_normal(r, outward_normal);
 
+        rec.mat = mat;
         // 6. Report a successful hit
         return true;
     }
@@ -56,6 +57,7 @@ public:
 private:
     point3 center;
     double radius;
+    shared_ptr<material> mat;
 };
 
 #endif // SPHERE_H

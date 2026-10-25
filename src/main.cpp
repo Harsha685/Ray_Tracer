@@ -9,8 +9,11 @@ int main(){
 
     //world
     hittable_list world;
-    world.add(make_shared<sphere>(point3(0,0,-1), 0.5));        // Small ball 1 unit in front of the camera, radius 0.5
-    world.add(make_shared<sphere>(point3(0,-100.5,-1), 100));   // Huge sphere acting as the ground; its top sits at y = -0.5, under the ball
+    auto ground_mat = make_shared<lambertian>(color(0.5, 0.5, 0.5));
+    auto ball_mat   = make_shared<lambertian>(color(0.5, 0.5, 0.5));
+
+    world.add(make_shared<sphere>(point3(0, 0, -1), 0.5, ball_mat));
+    world.add(make_shared<sphere>(point3(0, -100.5, -1), 100, ground_mat));
 
     camera cam;
     cam.aspect_ratio = 16.0/9.0;     // Widescreen width:height

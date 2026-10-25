@@ -3,6 +3,7 @@
 
 #include "common.h"
 #include "hittable.h"
+#include "material.h"
 
 class camera {
   public:
@@ -92,11 +93,10 @@ class camera {
 
     // Returns the color seen along ray r.
     //
-    // If the ray hits an object, the surface is treated as a diffuse (matte) material:
-    // the ray bounces off in a random direction on the same side as the surface normal,
-    // and the color is half of whatever that bounced ray sees. The factor 0.5 means each
-    // surface absorbs 50% of the light, which is what makes objects look grey and gives
-    // shadows where light has to bounce many times to escape.
+    // If the ray hits an object, the object's material decides what happens:
+    // scatter() returns the bounced ray and its attenuation (how much of each
+    // color survives). The result is attenuation times whatever the bounced ray
+    // sees. If the material absorbs the ray, the result is black.
     //
     // depth counts how many more bounces are allowed. Every bounce passes depth - 1, and
     // once it reaches 0 we return black (no light gathered). Without this limit a ray
@@ -112,9 +112,14 @@ class camera {
 
         // Start at 0.001 instead of 0 so floating-point error can't make a ray hit the surface it starts on
         if (world.hit(r, interval(0.001, infinity), rec)) {
-            // Pick a random bounce direction in the hemisphere the normal points into
-            vector3 direction = random_on_hemisphere(rec.normal);
-            return 0.5 * ray_color(ray(rec.point, direction), depth - 1, world);
+            ray scattered;
+            color attenuation;
+
+            // Ask the surface's material how the ray bounces and how much light it keeps
+            if (rec.mat->scatter(r, rec, attenuation, scattered))
+                return attenuation * ray_color(scattered, depth - 1, world);
+
+            return color(0, 0, 0);  // The material absorbed the ray
         }
 
         vector3 unit_direction = unit_vector(r.direction());

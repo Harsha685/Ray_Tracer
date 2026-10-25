@@ -102,6 +102,14 @@ public:
     static vector3 random(double min, double max) {
         return vector3(random_double(min,max), random_double(min,max), random_double(min,max));
     }
+
+    bool near_zero() const {
+        // True if the vector is very close to zero in all three directions
+        auto s = 1e-8;
+        return (std::fabs(coords[0]) < s)
+            && (std::fabs(coords[1]) < s)
+            && (std::fabs(coords[2]) < s);
+    }
 };
 
 // Alias of vector3
