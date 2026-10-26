@@ -18,9 +18,10 @@ and a CUDA GPU port.
 - [x] Sky background using a linear blend (lerp) on ray direction
 - [x] Ray–sphere intersection (quadratic formula, simplified "half-b" form)
 - [x] Surface normals, visualized as colors
-- [ ] Multiple objects via an abstract `hittable` class and `hittable_list`
-- [ ] Anti-aliasing
-- [ ] Diffuse, metal and glass materials
+- [x] Multiple objects via an abstract `hittable` class and `hittable_list`
+- [x] Anti-aliasing
+- [x] Diffuse (Lambertian), metal (with fuzz) and glass materials
+- [x] Refraction with total internal reflection and Schlick reflectance
 - [ ] Positionable camera and depth of field
 
 ## Building and running
@@ -40,19 +41,26 @@ make test    # build and run src/test.cpp
 make clean   # remove build output
 ```
 
-The renderer writes a PPM image to `build/image.ppm`, which is converted to
-`build/image.png`.
+The renderer writes a PPM image to `build/image.ppm`, which is converted to a
+timestamped PNG in `renders/` (e.g. `renders/render_YYYYMMDD_HHMMSS.png`).
 
 ## Project structure
 
 ```
 raytracer/
 ├── src/
-│   ├── vec3.h      # vector3 class, point3 alias, vector math
-│   ├── color.h     # color alias and pixel output
-│   ├── ray.h       # ray: origin + t * direction
-│   ├── main.cpp    # camera setup and render loop
-│   └── test.cpp    # tests for the math classes
+│   ├── common.h         # shared constants, random numbers, common includes
+│   ├── vec3.h           # vector3 class, point3 alias, vector math
+│   ├── color.h          # color alias, gamma correction and pixel output
+│   ├── ray.h            # ray: origin + t * direction
+│   ├── interval.h       # [min, max] ranges for hit tests and clamping
+│   ├── hittable.h       # hit_record and the abstract hittable class
+│   ├── hittable_list.h  # a list of hittables treated as one object
+│   ├── sphere.h         # ray-sphere intersection
+│   ├── material.h       # lambertian, metal and dielectric materials
+│   ├── camera.h         # viewport, ray generation and the render loop
+│   ├── main.cpp         # scene setup
+│   └── test.cpp         # debug output for the intersection math
 ├── renders/        # saved output images
 ├── build/          # compiled binaries and temporary images (git-ignored)
 ├── Makefile

@@ -11,6 +11,10 @@ class camera {
     int image_width = 100;          // Rendered image width in pixels
     int samples_per_pixel = 10;     // Random rays averaged per pixel (antialiasing)
     int max_depth = 10;             // Maximum number of bounces a ray may make before we give up on it
+    double vfov = 90;               // Vertical view angle (field of view), in degrees
+    point3 lookfrom = point3(0,0,0);   // Point camera is looking from
+    point3 lookat   = point3(0,0,-1);  // Point camera is looking at
+    vector3 vup     = vector3(0,1,0);  // Camera-relative "up" direction
 
     // Renders the whole scene and writes it to stdout as a plain-text PPM (P3) image.
     //
@@ -53,13 +57,17 @@ class camera {
     point3 pixel00_loc;         // World position of the center of pixel (0, 0), the top-left pixel
     vector3 pixel_delta_u;      // Offset from one pixel to the next one to the right
     vector3 pixel_delta_v;      // Offset from one pixel to the next one below
+    vector3 u, v, w;            // Camera frame basis vectors: right, up, and backward (opposite the view direction)
 
     // Computes every derived value the renderer needs from the public settings.
     //
-    // The camera sits at the origin looking down the -z axis. One unit in front of it
-    // (focal_length) is an imaginary rectangle, the viewport, which is the "window" the
-    // image is seen through. The viewport is divided into an image_width x image_height
-    // grid; each grid cell is one pixel. This function finds:
+    // The camera sits at lookfrom and looks toward lookat. It builds an orthonormal
+    // frame (u, v, w): w points backward (from lookat to lookfrom), u points to the
+    // camera's right, and v is the camera's up, tilted from vup so it is perpendicular to w.
+    // focal_length in front of the camera (along -w) is an imaginary rectangle, the
+    // viewport, which is the "window" the image is seen through. Its height comes from
+    // vfov. The viewport is divided into an image_width x image_height grid; each grid
+    // cell is one pixel. This function finds:
     //   - image_height (at least 1 pixel tall),
     //   - the vectors pixel_delta_u / pixel_delta_v that step one pixel right / down,
     //   - pixel00_loc, the world-space center of the top-left pixel.
@@ -68,16 +76,23 @@ class camera {
         image_height = int(image_width / aspect_ratio);
         image_height = (image_height < 1) ? 1 : image_height;
         pixel_samples_scale = 1.0 / samples_per_pixel;
-        center = point3(0, 0, 0);
+        center = lookfrom;
 
         // Viewport dimensions
-        auto focal_length = 1.0;     // Distance from the camera to the viewport plane
-        auto viewport_height = 2.0;  // Viewport spans y = -1 to +1 in world units
+        auto focal_length = (lookfrom - lookat).length();  // Distance from the camera to the viewport plane
+        auto theta = degrees_to_radians(vfov);
+        auto h = std::tan(theta / 2);          // Half the viewport height at distance 1
+        auto viewport_height = 2 * h * focal_length;
         auto viewport_width = viewport_height * (double(image_width) / image_height);
 
+        // Unit basis vectors for the camera's coordinate frame
+        w = unit_vector(lookfrom - lookat);
+        u = unit_vector(cross(vup, w));
+        v = cross(w, u);
+
         // Vectors across the horizontal and down the vertical viewport edges
-        auto viewport_u = vector3(viewport_width, 0, 0);
-        auto viewport_v = vector3(0, -viewport_height, 0);  // Negative: image rows go down while world y goes up
+        auto viewport_u = viewport_width * u;
+        auto viewport_v = viewport_height * -v;  // Negative: image rows go down while camera up goes up
 
         // Horizontal and vertical delta vectors from pixel to pixel
         pixel_delta_u = viewport_u / image_width;
@@ -85,7 +100,7 @@ class camera {
 
         // Location of the upper-left pixel
         auto viewport_upper_left =
-            center - vector3(0, 0, focal_length) - viewport_u / 2 - viewport_v / 2;
+            center - (focal_length * w) - viewport_u / 2 - viewport_v / 2;
 
         // Step half a pixel in from the corner to reach the first pixel's center
         pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
