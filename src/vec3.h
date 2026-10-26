@@ -220,4 +220,10 @@ inline vector3 reflect(const vector3& v, const vector3& n) {
     return v - 2*dot(v,n)*n;
 }
 
+inline vector3 refract(const vector3& v, const vector3& n, double n1_over_n2){
+    auto cos_theta = std::fmin(dot(-v,n),1.0);
+    vector3 r_out_perp = n1_over_n2 * (v + cos_theta*n);
+    vector3 r_out_parallel = -std::sqrt(std::fabs(1.0 - r_out_perp.length_squared())) * n;
+    return r_out_perp + r_out_parallel;
+}
 #endif // VEC3_H
