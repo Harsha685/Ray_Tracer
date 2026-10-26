@@ -5,33 +5,51 @@
 
 // A range of real numbers [min, max]. Used for the allowed t range of a ray and for clamping.
 class interval {
-  public:
+public:
     double min, max;
 
-    // Creates an empty interval. min > max means no number can be inside it.
-    interval() : min(+infinity), max(-infinity) {} // Default interval is empty
+    /*
+     * Creates an empty interval.
+     *
+     *  - min = +infinity and max = -infinity, so no number can be inside it.
+     */
+    interval() : min(+infinity), max(-infinity) {}
 
-    // Creates the interval [min, max].
+    /*
+     * Creates the interval [min, max].
+     */
     interval(double min, double max) : min(min), max(max) {}
 
-    // Length of the interval (negative if the interval is empty).
+    /*
+     * Returns the length of the interval (negative if the interval is empty).
+     */
     double size() const {
         return max - min;
     }
 
-    // True if x lies in the closed interval [min, max] (endpoints included).
+    /*
+     * Returns true if x lies in the closed interval [min, max] (endpoints included).
+     */
     bool contains(double x) const {
         return min <= x && x <= max;
     }
 
-    // True if x lies in the open interval (min, max) (endpoints excluded).
-    // Used for ray hits so a hit exactly at t = min or t = max is rejected.
+    /*
+     * Returns true if x lies in the open interval (min, max) (endpoints excluded).
+     *
+     *  - Used for ray hits, so a hit exactly at t = min or t = max is rejected.
+     */
     bool surrounds(double x) const {
         return min < x && x < max;
     }
 
-    // Returns x forced into [min, max]: values below min become min, values above max
-    // become max, and values already inside are returned unchanged.
+    /*
+     * Returns x forced into [min, max].
+     *
+     *  - Values below min become min.
+     *  - Values above max become max.
+     *  - Values already inside are returned unchanged.
+     */
     double clamp(double x) const {
         if (x < min) return min;
         if (x > max) return max;

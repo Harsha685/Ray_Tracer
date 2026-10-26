@@ -6,13 +6,18 @@
 #include "sphere.h"
 
 #include <iomanip>
+#include <string>
 
-// Traces one ray through the center of every 5th pixel down the middle column of the
-// image (no antialiasing, no bounces) and prints, per pixel: which object was hit (ball,
-// ground, or sky), the ray parameter t, the hit point, the surface normal, and the color
-// the normal-shading would give. Useful for checking the intersection math by eye.
+/*
+ * Traces one ray through the center of every 5th pixel down the middle column.
+ *
+ *  - No antialiasing and no bounces: one primary ray per sampled pixel.
+ *  - Prints, per pixel: which object was hit (ball, ground, or sky), the ray parameter
+ *    t, the hit point, the surface normal, and the normal-shading color.
+ *  - Useful for checking the intersection math by eye.
+ */
 int main() {
-    // Same image and camera setup as main.cpp
+    // Fixed pinhole camera at the origin looking down -z (independent of main.cpp)
     auto ar = 16.0 / 9.0;           // Aspect ratio (width / height)
     int img_w = 256;                // Image width in pixels
     int img_h = int(img_w / ar);    // Image height in pixels
@@ -31,7 +36,7 @@ int main() {
     auto vp_upper_left = camera_center - vector3(0, 0, focal_length) - vp_u / 2 - vp_v / 2;
     auto pixel_00_location = vp_upper_left + 0.5 * (pixel_spacing_u + pixel_spacing_v);
 
-    // Same world as main.cpp
+    // Simple two-sphere world: one ball resting on a large ground sphere
     point3 ball_center(0, 0, -1);
     double ball_radius = 0.5;
 

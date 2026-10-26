@@ -5,28 +5,35 @@
 #include "hittable.h"
 #include "material.h"
 
+// Positionable camera with antialiasing and defocus blur. Set the public fields, then
+// call render().
 class camera {
-  public:
-    double aspect_ratio = 1.0;      // Ratio of image width over height
-    int image_width = 100;          // Rendered image width in pixels
-    int samples_per_pixel = 10;     // Random rays averaged per pixel (antialiasing)
-    int max_depth = 10;             // Maximum number of bounces a ray may make before we give up on it
-    double vfov = 90;               // Vertical view angle (field of view), in degrees
-    point3 lookfrom = point3(0,0,0);   // Point camera is looking from
-    point3 lookat   = point3(0,0,-1);  // Point camera is looking at
-    vector3 vup     = vector3(0,1,0);  // Camera-relative "up" direction
+public:
+    double aspect_ratio = 1.0;          // Ratio of image width over height
+    int image_width = 100;              // Rendered image width in pixels
+    int samples_per_pixel = 10;         // Random rays averaged per pixel (antialiasing)
+    int max_depth = 10;                 // Maximum number of bounces a ray may make before we give up on it
 
-    // Renders the whole scene and writes it to stdout as a plain-text PPM (P3) image.
-    //
-    // Steps:
-    //   1. initialize() works out the image height and the viewport geometry.
-    //   2. The PPM header is printed: "P3", width, height, and the max color value 255.
-    //   3. Every pixel is visited row by row (top to bottom), left to right inside a row.
-    //   4. For each pixel, samples_per_pixel rays are shot through random points inside
-    //      that pixel and their colors are summed. Multiplying by pixel_samples_scale turns
-    //      that sum into an average, which smooths jagged edges (antialiasing).
-    //   5. The averaged color is written out as three bytes by write_color().
-    // Progress is reported on stderr (std::clog) so it does not end up inside the image.
+    double vfov = 90;                   // Vertical view angle (field of view), in degrees
+    point3 lookfrom = point3(0, 0, 0);  // Point camera is looking from
+    point3 lookat   = point3(0, 0, -1); // Point camera is looking at
+    vector3 vup     = vector3(0, 1, 0); // Camera-relative "up" direction
+
+    double defocus_angle = 0;           // Variation angle of rays through each pixel, in degrees (0 = pinhole, no blur)
+    double focus_dist = 10;             // Distance from lookfrom to the plane of perfect focus
+
+    /*
+     * Renders the whole scene and writes it to stdout as a plain-text PPM (P3) image.
+     *
+     *  - initialize() works out the image height and the viewport geometry.
+     *  - The PPM header is printed: "P3", width, height, and the max color value 255.
+     *  - Pixels are visited row by row (top to bottom), left to right inside a row.
+     *  - For each pixel, samples_per_pixel rays are shot through random points inside
+     *    the pixel and their colors are summed; multiplying by pixel_samples_scale
+     *    averages them, which smooths jagged edges (antialiasing).
+     *  - The averaged color is written out by write_color().
+     *  - Progress is reported on stderr (std::clog) so it does not end up in the image.
+     */
     void render(const hittable& world) {
         initialize();
 
@@ -50,28 +57,31 @@ class camera {
         std::clog << "\rDone.                 \n";
     }
 
-  private:
+private:
     int image_height;           // Rendered image height, derived from width and aspect ratio
     double pixel_samples_scale; // 1 / samples_per_pixel, turns the summed samples into an average
-    point3 center;              // Camera position (where every ray starts)
+    point3 center;              // Camera position (where every ray starts when there is no blur)
     point3 pixel00_loc;         // World position of the center of pixel (0, 0), the top-left pixel
     vector3 pixel_delta_u;      // Offset from one pixel to the next one to the right
     vector3 pixel_delta_v;      // Offset from one pixel to the next one below
     vector3 u, v, w;            // Camera frame basis vectors: right, up, and backward (opposite the view direction)
+    vector3 defocus_disk_u;     // Defocus disk horizontal radius
+    vector3 defocus_disk_v;     // Defocus disk vertical radius
 
-    // Computes every derived value the renderer needs from the public settings.
-    //
-    // The camera sits at lookfrom and looks toward lookat. It builds an orthonormal
-    // frame (u, v, w): w points backward (from lookat to lookfrom), u points to the
-    // camera's right, and v is the camera's up, tilted from vup so it is perpendicular to w.
-    // focal_length in front of the camera (along -w) is an imaginary rectangle, the
-    // viewport, which is the "window" the image is seen through. Its height comes from
-    // vfov. The viewport is divided into an image_width x image_height grid; each grid
-    // cell is one pixel. This function finds:
-    //   - image_height (at least 1 pixel tall),
-    //   - the vectors pixel_delta_u / pixel_delta_v that step one pixel right / down,
-    //   - pixel00_loc, the world-space center of the top-left pixel.
-    // With these, any pixel's center is pixel00_loc + j * pixel_delta_u + i * pixel_delta_v.
+    /*
+     * Computes every derived value the renderer needs from the public settings.
+     *
+     *  - Builds an orthonormal camera frame (u, v, w): w points backward (from lookat
+     *    to lookfrom), u points to the camera's right, and v is the camera's up,
+     *    tilted from vup so it is perpendicular to w.
+     *  - Places the viewport, an imaginary rectangle the image is seen through,
+     *    focus_dist in front of the camera (along -w). Its height comes from vfov.
+     *  - image_height is derived from image_width and aspect_ratio (at least 1 pixel).
+     *  - pixel_delta_u / pixel_delta_v step one pixel right / down across the viewport.
+     *  - pixel00_loc is the world-space center of the top-left pixel, so any pixel's
+     *    center is pixel00_loc + j * pixel_delta_u + i * pixel_delta_v.
+     *  - Sizes the defocus disk (the lens) from defocus_angle and focus_dist.
+     */
     void initialize() {
         image_height = int(image_width / aspect_ratio);
         image_height = (image_height < 1) ? 1 : image_height;
@@ -79,10 +89,9 @@ class camera {
         center = lookfrom;
 
         // Viewport dimensions
-        auto focal_length = (lookfrom - lookat).length();  // Distance from the camera to the viewport plane
         auto theta = degrees_to_radians(vfov);
-        auto h = std::tan(theta / 2);          // Half the viewport height at distance 1
-        auto viewport_height = 2 * h * focal_length;
+        auto h = std::tan(theta / 2);               // Half the viewport height at distance 1
+        auto viewport_height = 2 * h * focus_dist;  // Viewport sits on the focus plane
         auto viewport_width = viewport_height * (double(image_width) / image_height);
 
         // Unit basis vectors for the camera's coordinate frame
@@ -100,38 +109,44 @@ class camera {
 
         // Location of the upper-left pixel
         auto viewport_upper_left =
-            center - (focal_length * w) - viewport_u / 2 - viewport_v / 2;
+            center - (focus_dist * w) - viewport_u / 2 - viewport_v / 2;
 
         // Step half a pixel in from the corner to reach the first pixel's center
         pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
+
+        // Lens radius: the cone with apex at the focus plane and half-angle defocus_angle / 2
+        auto defocus_radius = focus_dist * std::tan(degrees_to_radians(defocus_angle / 2));
+        defocus_disk_u = u * defocus_radius;
+        defocus_disk_v = v * defocus_radius;
     }
 
-    // Returns the color seen along ray r.
-    //
-    // If the ray hits an object, the object's material decides what happens:
-    // scatter() returns the bounced ray and its attenuation (how much of each
-    // color survives). The result is attenuation times whatever the bounced ray
-    // sees. If the material absorbs the ray, the result is black.
-    //
-    // depth counts how many more bounces are allowed. Every bounce passes depth - 1, and
-    // once it reaches 0 we return black (no light gathered). Without this limit a ray
-    // trapped between surfaces would recurse forever and overflow the stack.
-    //
-    // If the ray hits nothing it escapes to the sky, which is a vertical gradient from
-    // white (looking down) to light blue (looking up).
+    /*
+     * Returns the color seen along ray r.
+     *
+     *  - If the ray hits an object, the object's material decides what happens:
+     *    scatter() returns the bounced ray and its attenuation, and the result is
+     *    attenuation times whatever the bounced ray sees.
+     *  - If the material absorbs the ray, the result is black.
+     *  - depth is the number of bounces still allowed. Each bounce passes depth - 1;
+     *    at 0 the function returns black. Without this limit a ray trapped between
+     *    surfaces would recurse forever and overflow the stack.
+     *  - Hits closer than t = 0.001 are ignored so floating-point error cannot make a
+     *    ray hit the surface it starts on (shadow acne).
+     *  - If the ray hits nothing it escapes to the sky: a vertical gradient from white
+     *    (looking down) to light blue (looking up).
+     */
     color ray_color(const ray& r, int depth, const hittable& world) const {
         if (depth <= 0)
             return color(0, 0, 0);
 
         hit_record rec;
 
-        // Start at 0.001 instead of 0 so floating-point error can't make a ray hit the surface it starts on
         if (world.hit(r, interval(0.001, infinity), rec)) {
             ray scattered;
             color attenuation;
             if (rec.mat->scatter(r, rec, attenuation, scattered))
-                return attenuation * ray_color(scattered, depth-1, world);
-            return color(0,0,0);
+                return attenuation * ray_color(scattered, depth - 1, world);
+            return color(0, 0, 0);
         }
 
         vector3 unit_direction = unit_vector(r.direction());
@@ -141,22 +156,42 @@ class camera {
         return (1.0 - a) * color(1.0, 1.0, 1.0) + a * color(0.5, 0.7, 1.0);
     }
 
-    // Returns a random offset inside one pixel, in pixel units.
-    //
-    // x and y are each uniform in [-0.5, 0.5], so the point lands anywhere in the
-    // unit square centered on the pixel's center. z is unused (always 0). get_ray()
-    // scales x by pixel_delta_u and y by pixel_delta_v to turn this into a world offset.
+    /*
+     * Returns a random offset inside one pixel, in pixel units.
+     *
+     *  - x and y are each uniform in [-0.5, 0.5], so the point lands anywhere in the
+     *    unit square centered on the pixel's center.
+     *  - z is unused (always 0).
+     *  - get_ray() scales x by pixel_delta_u and y by pixel_delta_v to turn this into
+     *    a world-space offset.
+     */
     vector3 sample_square() const {
         return vector3(random_double() - 0.5, random_double() - 0.5, 0);
     }
 
-    // Builds a ray from the camera through a random point inside pixel (row i, column j).
-    //
-    // The pixel's center is pixel00_loc + j * pixel_delta_u + i * pixel_delta_v. A random
-    // offset from sample_square() is added to j and i first, so each call aims at a
-    // slightly different spot inside the pixel. Averaging many such rays in render() is
-    // what produces antialiasing. The ray starts at the camera center and its direction
-    // is the (non-normalized) vector from the camera to that sample point.
+    /*
+     * Returns a random point on the camera's defocus disk (the lens).
+     *
+     *  - The disk is centered on center and spanned by defocus_disk_u / defocus_disk_v.
+     */
+    point3 defocus_disk_sample() const {
+        auto p = random_in_unit_disk();
+        return center + (p[0] * defocus_disk_u) + (p[1] * defocus_disk_v);
+    }
+
+    /*
+     * Builds a ray from the camera through a random point inside pixel (row i, column j).
+     *
+     *  - The pixel's center is pixel00_loc + j * pixel_delta_u + i * pixel_delta_v.
+     *  - A random offset from sample_square() is added first, so each call aims at a
+     *    slightly different spot inside the pixel; averaging these in render() is what
+     *    produces antialiasing.
+     *  - The ray starts at a random point on the defocus disk, or exactly at center
+     *    when defocus_angle <= 0.
+     *  - Its direction is the (non-normalized) vector from that origin to the sample point.
+     *  - Points on the focus plane are hit by every ray of the pixel and stay sharp;
+     *    anything nearer or farther is smeared across the lens, which is the blur.
+     */
     ray get_ray(int i, int j) const {
         auto offset = sample_square();  // Random jitter within the pixel
 
@@ -164,7 +199,7 @@ class camera {
                           + ((j + offset.x()) * pixel_delta_u)
                           + ((i + offset.y()) * pixel_delta_v);
 
-        auto ray_origin = center;
+        auto ray_origin = (defocus_angle <= 0) ? center : defocus_disk_sample();
         auto ray_direction = pixel_sample - ray_origin;
 
         return ray(ray_origin, ray_direction);
