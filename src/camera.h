@@ -5,14 +5,15 @@
 #include "hittable.h"
 #include "material.h"
 
-// Positionable camera with antialiasing and defocus blur. Set the public fields, then
-// call render().
+// Positionable camera with antialiasing and defocus blur that renders on multiple
+// threads. Set the public fields, then call render().
 class camera {
 public:
     double aspect_ratio = 1.0;          // Ratio of image width over height
     int image_width = 100;              // Rendered image width in pixels
     int samples_per_pixel = 10;         // Random rays averaged per pixel (antialiasing)
     int max_depth = 10;                 // Maximum number of bounces a ray may make before we give up on it
+    int thread_count = 0;               // Render threads to run; 0 = one per logical CPU core
 
     double vfov = 90;                   // Vertical view angle (field of view), in degrees
     point3 lookfrom = point3(0, 0, 0);  // Point camera is looking from
@@ -26,35 +27,68 @@ public:
      * Renders the whole scene and writes it to stdout as a plain-text PPM (P3) image.
      *
      *  - initialize() works out the image height and the viewport geometry.
-     *  - The PPM header is printed: "P3", width, height, and the max color value 255.
-     *  - Pixels are visited row by row (top to bottom), left to right inside a row.
+     *  - frame_buffer is sized to hold one color per pixel. Pixel (i, j) lives at
+     *    index i * image_width + j, so every pixel has its own fixed slot.
+     *  - Rows are rendered in parallel. thread_count threads each run worker(), which
+     *    claims the next unrendered row from the atomic counter next_row, renders it
+     *    left to right, and repeats until no rows are left. Slow rows (lots of
+     *    bounces) and fast rows (mostly sky) balance out because idle threads just
+     *    claim more rows.
+     *  - Threads never share a pixel, so they never write the same frame_buffer slot.
+     *  - join() waits for every thread to finish before the image is written.
      *  - For each pixel, samples_per_pixel rays are shot through random points inside
      *    the pixel and their colors are summed; multiplying by pixel_samples_scale
      *    averages them, which smooths jagged edges (antialiasing).
-     *  - The averaged color is written out by write_color().
+     *  - The averaged color is stored in frame_buffer, not printed straight away.
+     *  - Once every pixel is done, write_framebuffer() prints the whole image.
      *  - Progress is reported on stderr (std::clog) so it does not end up in the image.
      */
     void render(const hittable& world) {
         initialize();
 
-        std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
+        frame_buffer.assign(image_width * image_height, color(0, 0, 0));
 
-        for (int i = 0; i < image_height; i++) {      // i = row (y), top to bottom
-            std::clog << "\rScanlines remaining: " << (image_height - i) << ' ' << std::flush;
+        std::atomic<int> next_row{0};   // Next row nobody has claimed yet, shared by all threads
 
-            for (int j = 0; j < image_width; j++) {   // j = column (x), left to right
-                color pixel_color(0, 0, 0);
+        // Each thread runs this: claim a row, render it, repeat until no rows are left
+        auto worker = [&]() {
+            while (true) {
+                int i = next_row.fetch_add(1);   // Claim row i; no other thread can get the same i
+                if (i >= image_height)
+                    break;
 
-                for (int sample = 0; sample < samples_per_pixel; sample++) {
-                    ray r = get_ray(i, j);
-                    pixel_color += ray_color(r, max_depth, world);
+                std::clog << "\rScanlines remaining: " << (image_height - i) << ' ' << std::flush;
+
+                for (int j = 0; j < image_width; j++) {   // j = column (x), left to right
+                    color pixel_color(0, 0, 0);
+
+                    for (int sample = 0; sample < samples_per_pixel; sample++) {
+                        ray r = get_ray(i, j);
+                        pixel_color += ray_color(r, max_depth, world);
+                    }
+
+                    frame_buffer[i * image_width + j] = pixel_samples_scale * pixel_color;
                 }
-
-                write_color(std::cout, pixel_samples_scale * pixel_color);
             }
-        }
+        };
+
+        // 0 means one thread per logical CPU core; hardware_concurrency() returns 0 if it can't tell
+        int count = thread_count;
+        if (count <= 0)
+            count = std::thread::hardware_concurrency();
+        if (count <= 0)
+            count = 1;
+
+        std::vector<std::thread> threads;
+        for (int t = 0; t < count; t++)
+            threads.emplace_back(worker);        // Thread starts running worker() immediately
+
+        for (auto& t : threads)
+            t.join();                            // Wait until every row is finished
 
         std::clog << "\rDone.                 \n";
+
+        write_framebuffer();
     }
 
 private:
@@ -67,6 +101,21 @@ private:
     vector3 u, v, w;            // Camera frame basis vectors: right, up, and backward (opposite the view direction)
     vector3 defocus_disk_u;     // Defocus disk horizontal radius
     vector3 defocus_disk_v;     // Defocus disk vertical radius
+    std::vector<color> frame_buffer;  // Finished pixel colors, row by row, written out at the end
+
+    /*
+     * Writes frame_buffer to stdout as a plain-text PPM (P3) image.
+     *
+     *  - The header is printed first: "P3", width, height, and the max color value 255.
+     *  - Pixels are then written in buffer order, which is row by row, top to bottom,
+     *    exactly the order the PPM format expects.
+     */
+    void write_framebuffer() const {
+        std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
+
+        for (const color& pixel : frame_buffer)
+            write_color(std::cout, pixel);
+    }
 
     /*
      * Computes every derived value the renderer needs from the public settings.

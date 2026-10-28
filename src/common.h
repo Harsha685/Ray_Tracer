@@ -6,6 +6,9 @@
 #include <limits>
 #include <memory>
 #include <random>
+#include <vector>
+#include <thread>
+#include <atomic>
 
 // C++ Std Usings
 using std::make_shared;
@@ -30,16 +33,24 @@ inline double degrees_to_radians(double degrees) {
 /*
  * Returns a uniformly distributed random number in [0, 1).
  *
- *  - The generator (Mersenne Twister) and the distribution are function-level statics:
- *    they are created once on the first call and reused afterwards.
+ *  - The generator (Mersenne Twister) and the distribution are thread_local: each
+ *    thread gets its own copy, created on that thread's first call and reused after.
+ *  - A single shared generator would be a data race, because every call updates the
+ *    generator's internal state and several render threads call this at once.
  *  - Creating a new generator on every call would be slow and would keep returning
  *    the same first value.
- *  - The generator is default-seeded, so every run produces the same sequence and
- *    renders are reproducible.
+ *  - Seeds come from next_seed, a counter shared by all threads that hands out
+ *    0, 1, 2, ... It is atomic so two threads starting at once never get the same seed.
+ *  - The main thread always calls this first (to build the scene), so it always gets
+ *    seed 0 and the scene is identical on every run.
+ *  - Render threads get the following seeds, so each produces a different sequence.
+ *    Which thread gets which seed and which rows depends on timing, so the noise in
+ *    the image still differs slightly between runs.
  */
 inline double random_double() {
-    static std::uniform_real_distribution<double> distribution(0.0, 1.0);
-    static std::mt19937 generator;
+    static std::atomic<unsigned> next_seed{0};   // Shared by all threads; hands out 0, 1, 2, ...
+    thread_local std::uniform_real_distribution<double> distribution(0.0, 1.0);
+    thread_local std::mt19937 generator(next_seed++);
     return distribution(generator);
 }
 

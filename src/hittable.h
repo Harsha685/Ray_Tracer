@@ -8,7 +8,7 @@ class material;  // Defined in material.h; hit_record only needs a pointer to it
 // Everything we need to know about a single ray/object intersection
 class hit_record {
 public:
-    shared_ptr<material> mat;   // Material of the surface that was hit
+    material* mat;              // Material of the surface that was hit (owned by the object, not the record)
     vector3 normal;             // Unit surface normal at the hit, always pointing against the ray
     point3 point;               // World position where the ray hit the surface
     double t;                   // Ray parameter at the hit: point = origin + t * direction

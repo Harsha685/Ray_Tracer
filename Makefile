@@ -6,7 +6,7 @@
 #   make clean  -> delete everything in build/
 
 CXX      := g++
-CXXFLAGS := -std=c++17 -O2 -Wall -Wextra
+CXXFLAGS := -std=c++17 -O3 -march=native -Wall -Wextra -pthread
 SRC      := src
 BUILD    := build
 RENDERS  := renders

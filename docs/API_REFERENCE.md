@@ -40,7 +40,7 @@ Shared includes, constants and random-number utilities.
 | Signature | Purpose |
 |-----------|---------|
 | `double degrees_to_radians(double degrees)` | Converts degrees to radians for use with `std::sin`, `std::cos`, `std::tan` |
-| `double random_double()` | Uniform random number in [0, 1). Default-seeded Mersenne Twister, so renders are reproducible |
+| `double random_double()` | Uniform random number in [0, 1). Each thread has its own `thread_local` Mersenne Twister, seeded from a shared atomic counter (0, 1, 2, ...). The main thread builds the scene with seed 0, so the scene is identical on every run |
 | `double random_double(double min, double max)` | Uniform random number in [min, max) |
 
 ---
@@ -166,7 +166,7 @@ Data describing a single ray/surface intersection.
 
 | Member | Purpose |
 |--------|---------|
-| `shared_ptr<material> mat` | Material of the surface hit |
+| `material* mat` | Material of the surface hit. A plain non-owning pointer (the object owns the material), so copying a `hit_record` never touches a shared reference count |
 | `vector3 normal` | Unit normal, always facing against the incoming ray |
 | `point3 point` | World-space hit position |
 | `double t` | Ray parameter at the hit |
@@ -257,8 +257,8 @@ Transparent surface (glass, water).
 
 ### class `camera`
 
-Positionable camera with antialiasing and defocus blur. Configure the public
-fields, then call `render()`.
+Positionable camera with antialiasing and defocus blur that renders on multiple
+threads. Configure the public fields, then call `render()`.
 
 #### Public settings
 
@@ -268,6 +268,7 @@ fields, then call `render()`.
 | `int image_width` | `100` | Image width in pixels |
 | `int samples_per_pixel` | `10` | Rays averaged per pixel |
 | `int max_depth` | `10` | Maximum ray bounces |
+| `int thread_count` | `0` | Render threads; 0 uses one per logical CPU core |
 | `double vfov` | `90` | Vertical field of view in degrees |
 | `point3 lookfrom` | `(0, 0, 0)` | Camera position |
 | `point3 lookat` | `(0, 0, -1)` | Point the camera looks at |
@@ -279,13 +280,14 @@ fields, then call `render()`.
 
 | Signature | Purpose |
 |-----------|---------|
-| `void render(const hittable& world)` | Renders the scene to stdout as a P3 PPM image; progress on stderr |
+| `void render(const hittable& world)` | Renders the scene in parallel into a frame buffer (threads claim rows from an atomic counter), then writes it to stdout as a P3 PPM image; progress on stderr |
 
 #### Private methods
 
 | Signature | Purpose |
 |-----------|---------|
 | `void initialize()` | Derives image height, camera basis, viewport, pixel deltas and defocus disk |
+| `void write_framebuffer() const` | Writes the PPM header and every pixel of the frame buffer to stdout, in row order |
 | `color ray_color(const ray& r, int depth, const hittable& world) const` | Recursively traces a ray; returns sky gradient on a miss |
 | `vector3 sample_square() const` | Random offset in [-0.5, 0.5]^2 within a pixel |
 | `point3 defocus_disk_sample() const` | Random ray origin on the lens disk |
@@ -297,7 +299,7 @@ fields, then call `render()`.
 
 | Signature | Purpose |
 |-----------|---------|
-| `int main()` | Builds the scene (ground, diffuse, glass with air bubble, fuzzy metal), configures the camera and renders |
+| `int main()` | Builds the book 1 final scene (ground, a 22 x 22 grid of random small spheres, three large glass, diffuse and metal spheres), configures the camera and renders |
 
 ## test.cpp
 

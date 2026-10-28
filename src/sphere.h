@@ -56,7 +56,7 @@ public:
         rec.point = r.at(rec.t);
         vector3 outward_normal = (rec.point - center) / radius;  // Dividing by radius makes it unit length
         rec.set_face_normal(r, outward_normal);
-        rec.mat = mat;
+        rec.mat = mat.get();  // Plain pointer: copying it costs nothing, unlike a shared_ptr
 
         // 6. Report a successful hit
         return true;

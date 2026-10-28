@@ -20,6 +20,8 @@ A ray tracer written from scratch in C++17, following Peter Shirley's
     Schlick reflectance
 - Positionable camera (`lookfrom`, `lookat`, `vup`, adjustable field of view)
 - Defocus blur (depth of field) via a thin-lens model
+- Multithreaded rendering with `std::thread`: rows are handed out through an
+  atomic counter, and each thread has its own random number generator
 
 ## Building and running
 
@@ -43,7 +45,8 @@ timestamped PNG in `renders/` (`renders/render_YYYYMMDD_HHMMSS.png`).
 
 Scene and camera settings are configured in `src/main.cpp`. Render time
 scales with `image_width`, `samples_per_pixel` and `max_depth`; lower these
-for quick previews.
+for quick previews. `thread_count` sets the number of render threads (0 uses
+one per logical CPU core).
 
 ## Project structure
 
@@ -59,7 +62,7 @@ raytracer/
 │   ├── hittable_list.h  # a list of hittables treated as one object
 │   ├── sphere.h         # ray-sphere intersection
 │   ├── material.h       # lambertian, metal and dielectric materials
-│   ├── camera.h         # camera setup, ray generation and the render loop
+│   ├── camera.h         # camera setup, ray generation and the multithreaded render loop
 │   ├── main.cpp         # scene setup
 │   └── test.cpp         # debug output for the intersection math
 ├── docs/
