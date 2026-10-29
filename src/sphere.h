@@ -4,7 +4,6 @@
 #include "common.h"
 #include "hittable.h"
 #include "material.h"
-
 // A sphere defined by a center, a radius, and the material of its surface.
 class sphere : public hittable {
 public:
@@ -14,7 +13,10 @@ public:
      *  - A negative radius makes no sense, so it is clamped to 0 with std::fmax.
      */
     sphere(const point3& static_center, double radius, shared_ptr<material> mat)
-        : center(static_center, vector3(0, 0, 0)), radius(std::fmax(0, radius)), mat(mat) {}
+        : center(static_center, vector3(0, 0, 0)), radius(std::fmax(0, radius)), mat(mat) {
+            auto rvec = vector3(radius, radius, radius);
+            bound_box = aabb(static_center - rvec, static_center + rvec);
+        }
 
     /*
      * Creates a moving sphere whose center travels from center1 at time 0 to center2
@@ -22,7 +24,14 @@ public:
      */
     sphere(const point3& center1, const point3& center2, double radius,
            shared_ptr<material> mat)
-        : center(center1, center2 - center1), radius(std::fmax(0, radius)), mat(mat) {}
+        : center(center1, center2 - center1), radius(std::fmax(0, radius)), mat(mat)
+    {
+        // Box must enclose the sphere at both ends of its motion
+        auto rvec = vector3(radius, radius, radius);
+        aabb box1(center.at(0) - rvec, center.at(0) + rvec);
+        aabb box2(center.at(1) - rvec, center.at(1) + rvec);
+        bound_box = aabb(box1, box2);
+    }
 
     /*
      * Tests whether ray r hits this sphere at some t strictly inside ray_t.
@@ -71,10 +80,13 @@ public:
         return true;
     }
 
+    aabb bounding_box() const override { return bound_box; }
+
 private:
     ray center;                 // Center path: center.at(time) is the center at that time
     double radius;              // Radius, never negative
     shared_ptr<material> mat;   // Surface material, shared with any other object using it
+    aabb bound_box;             // Box enclosing the sphere over its whole motion
 };
 
 #endif // SPHERE_H

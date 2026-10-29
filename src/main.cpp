@@ -2,6 +2,7 @@
 #include "camera.h"
 #include "sphere.h"
 #include "hittable_list.h"
+#include "bvh.h"
 
 /*
  * Entry point: builds the scene, configures the camera, and renders the image to stdout.
@@ -60,13 +61,16 @@ int main() {
     auto material3 = make_shared<metal>(color(0.7, 0.6, 0.5), 0.0);
     world.add(make_shared<sphere>(point3(4, 1, 0), 1.0, material3));
 
+    // Wrap the scene in a BVH so each ray only tests objects whose boxes it passes through
+    world = hittable_list(make_shared<bvh_node>(world));
+
     // Camera
     camera cam;
 
     cam.aspect_ratio      = 16.0 / 9.0;  // Widescreen width:height
-    cam.image_width       = 400;        // Width in pixels (height becomes 225)
-    cam.samples_per_pixel = 100;          // Rays per pixel for antialiasing
-    cam.max_depth         = 50;         // Maximum bounces per ray
+    cam.image_width       = 1400;        // Width in pixels (height becomes 225)
+    cam.samples_per_pixel = 200;          // Rays per pixel for antialiasing
+    cam.max_depth         = 100;         // Maximum bounces per ray
 
     cam.vfov     = 20;                   // Vertical field of view in degrees
     cam.lookfrom = point3(13, 2, 3);     // Low and off to the side, looking across the field

@@ -4,6 +4,7 @@
 #include "common.h"
 #include "interval.h"
 #include "ray.h"
+#include "AABB.h"
 
 class material;  // Defined in material.h; hit_record only needs a pointer to it
 
@@ -54,6 +55,12 @@ public:
      *  - Each shape implements its own intersection math.
      */
     virtual bool hit(const ray& r, interval ray_t, hit_record& rec) const = 0;
+
+    /*
+     * Returns a box that fully encloses the object (over the whole shutter interval
+     * for moving objects).
+     */
+    virtual aabb bounding_box() const = 0;
 };
 
 #endif // HITTABLE_H
