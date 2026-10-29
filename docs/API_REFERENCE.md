@@ -8,18 +8,19 @@ block comment above each function.
 Header dependency order, from lowest to highest level:
 
 ```
-common.h  ->  interval.h, vec3.h, color.h, ray.h
+common.h  ->  interval.h, vec3.h  ->  color.h, ray.h
 hittable.h  ->  hittable_list.h, material.h  ->  sphere.h  ->  camera.h  ->  main.cpp
 ```
 
-`common.h` is the umbrella header. Including it pulls in `interval.h`,
-`color.h`, `ray.h` and `vec3.h`.
+`common.h` is the base header and includes no project headers, so there are no
+include cycles. Every other header includes exactly what it uses and can be
+included on its own.
 
 ---
 
 ## common.h
 
-Shared includes, constants and random-number utilities.
+Shared includes, aliases, constants and random-number utilities.
 
 ### Aliases
 
@@ -146,14 +147,17 @@ A 3-component vector of doubles, used for points, directions and colors.
 
 ### class `ray`
 
-A half-line P(t) = origin + t * direction.
+A half-line P(t) = origin + t * direction that exists at a moment in time
+(used for motion blur).
 
 | Member | Purpose |
 |--------|---------|
-| `ray()` | Zero origin and direction |
-| `ray(const point3& origin, const vector3& direction)` | Ray from origin along direction |
+| `ray()` | Zero origin and direction, time 0 |
+| `ray(const point3& origin, const vector3& direction, double time)` | Ray from origin along direction at the given time |
+| `ray(const point3& origin, const vector3& direction)` | Ray from origin along direction at time 0 |
 | `const point3& origin() const` | Starting point |
 | `const vector3& direction() const` | Direction (not normalized) |
+| `double time() const` | Moment in time the ray exists at |
 | `point3 at(double t) const` | Point at parameter t |
 
 ---
@@ -207,10 +211,11 @@ A collection of objects treated as a single hittable (the scene).
 
 | Member | Purpose |
 |--------|---------|
-| `sphere(const point3& center, double radius, shared_ptr<material> mat)` | Sphere with the given center, radius (clamped to >= 0) and material |
+| `sphere(const point3& static_center, double radius, shared_ptr<material> mat)` | Stationary sphere with the given center, radius (clamped to >= 0) and material |
+| `sphere(const point3& center1, const point3& center2, double radius, shared_ptr<material> mat)` | Moving sphere whose center travels from `center1` at time 0 to `center2` at time 1 |
 | `bool hit(const ray&, interval, hit_record&) const` | Ray-sphere intersection via the simplified quadratic formula |
 
-Private data: `center`, `radius`, `mat`.
+Private data: `center` (a `ray`; `center.at(time)` is the center at that time), `radius`, `mat`.
 
 ---
 
@@ -257,7 +262,7 @@ Transparent surface (glass, water).
 
 ### class `camera`
 
-Positionable camera with antialiasing and defocus blur. Configure the public
+Positionable camera with antialiasing, defocus blur and motion blur. Configure the public
 fields, then call `render()`.
 
 #### Public settings
@@ -289,7 +294,7 @@ fields, then call `render()`.
 | `color ray_color(const ray& r, int depth, const hittable& world) const` | Recursively traces a ray; returns sky gradient on a miss |
 | `vector3 sample_square() const` | Random offset in [-0.5, 0.5]^2 within a pixel |
 | `point3 defocus_disk_sample() const` | Random ray origin on the lens disk |
-| `ray get_ray(int i, int j) const` | Jittered ray for pixel (row i, column j) from the lens |
+| `ray get_ray(int i, int j) const` | Jittered ray for pixel (row i, column j) from the lens, at a random time in [0, 1) |
 
 ---
 

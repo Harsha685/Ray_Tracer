@@ -2,6 +2,8 @@
 #define HITTABLE_H
 
 #include "common.h"
+#include "interval.h"
+#include "ray.h"
 
 class material;  // Defined in material.h; hit_record only needs a pointer to it
 

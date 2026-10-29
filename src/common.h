@@ -1,6 +1,9 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+// Shared constants, aliases and random-number helpers. Includes no project headers,
+// so every other header can include it without creating an include cycle.
+
 #include <cmath>
 #include <iostream>
 #include <limits>
@@ -52,11 +55,5 @@ inline double random_double() {
 inline double random_double(double min, double max) {
     return min + (max - min) * random_double();
 }
-
-// Common Headers (included last, because they rely on the utilities above)
-#include "interval.h"
-#include "color.h"
-#include "ray.h"
-#include "vec3.h"
 
 #endif // COMMON_H

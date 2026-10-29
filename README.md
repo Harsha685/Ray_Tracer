@@ -20,6 +20,8 @@ A ray tracer written from scratch in C++17, following Peter Shirley's
     Schlick reflectance
 - Positionable camera (`lookfrom`, `lookat`, `vup`, adjustable field of view)
 - Defocus blur (depth of field) via a thin-lens model
+- Motion blur: rays carry a random time in [0, 1) and spheres can move linearly
+  between two centers over that interval
 
 ## Building and running
 
@@ -50,7 +52,7 @@ for quick previews.
 ```
 raytracer/
 ├── src/
-│   ├── common.h         # shared constants, random numbers, common includes
+│   ├── common.h         # shared constants, aliases and random numbers
 │   ├── vec3.h           # vector3 class, point3 alias, vector math and sampling
 │   ├── color.h          # color alias, gamma correction and pixel output
 │   ├── ray.h            # ray: origin + t * direction

@@ -9,12 +9,20 @@
 class sphere : public hittable {
 public:
     /*
-     * Creates a sphere with the given center, radius and material.
+     * Creates a stationary sphere with the given center, radius and material.
      *
      *  - A negative radius makes no sense, so it is clamped to 0 with std::fmax.
      */
-    sphere(const point3& center, double radius, shared_ptr<material> mat)
-        : center(center), radius(std::fmax(0, radius)), mat(mat) {}
+    sphere(const point3& static_center, double radius, shared_ptr<material> mat)
+        : center(static_center, vector3(0, 0, 0)), radius(std::fmax(0, radius)), mat(mat) {}
+
+    /*
+     * Creates a moving sphere whose center travels from center1 at time 0 to center2
+     * at time 1.
+     */
+    sphere(const point3& center1, const point3& center2, double radius,
+           shared_ptr<material> mat)
+        : center(center1, center2 - center1), radius(std::fmax(0, radius)), mat(mat) {}
 
     /*
      * Tests whether ray r hits this sphere at some t strictly inside ray_t.
@@ -30,7 +38,8 @@ public:
     bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
         // 1. Calculate oc, a, h, and c
         // Solves the quadratic a*t^2 - 2h*t + c = 0 for where the ray meets the sphere
-        vector3 oc = center - r.origin();                // Vector from ray origin to sphere center
+        point3 current_center = center.at(r.time());     // Where the sphere is at the ray's time
+        vector3 oc = current_center - r.origin();        // Vector from ray origin to sphere center
         auto a = r.direction().length_squared();         // Quadratic 'a' coefficient
         auto h = dot(r.direction(), oc);                 // Half of the quadratic 'b' coefficient (b = -2h)
         auto c = oc.length_squared() - radius * radius;  // Quadratic 'c' coefficient
@@ -54,7 +63,7 @@ public:
         // 5. Fill the hit record
         rec.t = root;
         rec.point = r.at(rec.t);
-        vector3 outward_normal = (rec.point - center) / radius;  // Dividing by radius makes it unit length
+        vector3 outward_normal = (rec.point - current_center) / radius;  // Dividing by radius makes it unit length
         rec.set_face_normal(r, outward_normal);
         rec.mat = mat;
 
@@ -63,7 +72,7 @@ public:
     }
 
 private:
-    point3 center;              // Center of the sphere in world space
+    ray center;                 // Center path: center.at(time) is the center at that time
     double radius;              // Radius, never negative
     shared_ptr<material> mat;   // Surface material, shared with any other object using it
 };
