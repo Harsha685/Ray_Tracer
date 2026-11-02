@@ -8,19 +8,22 @@ block comment above each function.
 Header dependency order, from lowest to highest level:
 
 ```
-common.h  ->  interval.h, vec3.h  ->  color.h, ray.h
+common.h helpers  ->  interval.h, vec3.h  ->  color.h, ray.h
 hittable.h  ->  hittable_list.h, material.h  ->  sphere.h  ->  camera.h  ->  main.cpp
 ```
 
-`common.h` is the base header and includes no project headers, so there are no
-include cycles. Every other header includes exactly what it uses and can be
-included on its own.
+`common.h` defines its helpers first, then includes `color.h`, `interval.h`,
+`ray.h` and `vec3.h` at the bottom, so including it gives a file all of those.
+Every `.cpp` file must include `common.h` first. `vec3.h` and `interval.h` use its
+helpers but do not include it, which avoids an include cycle, so they and the
+headers built on them cannot be compiled on their own.
 
 ---
 
 ## common.h
 
-Shared includes, aliases, constants and random-number utilities.
+Shared includes, aliases, constants, random-number utilities and the common
+project headers.
 
 ### Aliases
 
@@ -174,6 +177,7 @@ Data describing a single ray/surface intersection.
 | `vector3 normal` | Unit normal, always facing against the incoming ray |
 | `point3 point` | World-space hit position |
 | `double t` | Ray parameter at the hit |
+| `double u, v` | Surface texture coordinates; default to 0 because `sphere` does not compute them yet |
 | `bool front_face` | True if the ray hit the outside of the surface |
 | `void set_face_normal(const ray& r, const vector3& outward_normal)` | Sets `normal` and `front_face` from a unit outward normal |
 
@@ -219,6 +223,33 @@ Private data: `center` (a `ray`; `center.at(time)` is the center at that time), 
 
 ---
 
+## texture.h
+
+### class `Texture` (abstract)
+
+| Member | Purpose |
+|--------|---------|
+| `virtual ~Texture()` | Virtual destructor |
+| `virtual color value(double u, double v, const point3& p) const` | Returns the color at surface coordinates `(u, v)` and world position `p` |
+
+### class `Solid_color : Texture`
+
+| Member | Purpose |
+|--------|---------|
+| `Solid_color(const color& albedo)` | Texture with a single color |
+| `Solid_color(double red, double green, double blue)` | Same, from separate channels |
+| `color value(...) const` | Returns the color, ignoring all arguments |
+
+### class `checker_texture : Texture`
+
+| Member | Purpose |
+|--------|---------|
+| `checker_texture(double scale, shared_ptr<Texture> even, shared_ptr<Texture> odd)` | 3D checker of two textures with cells of side `scale` |
+| `checker_texture(double scale, const color& c1, const color& c2)` | Same, from two solid colors |
+| `color value(...) const` | Picks a texture by whether the cell indices of `p` sum to an even number |
+
+---
+
 ## material.h
 
 ### class `material` (abstract)
@@ -235,6 +266,7 @@ Diffuse (matte) surface.
 | Member | Purpose |
 |--------|---------|
 | `lambertian(const color& albedo)` | Diffuse material with the given reflectance |
+| `lambertian(shared_ptr<Texture> tex)` | Diffuse material whose reflectance comes from a texture |
 | `bool scatter(...) const` | Scatters along `normal + random_unit_vector()` (cosine-weighted); falls back to the normal if degenerate |
 
 ### class `metal : material`

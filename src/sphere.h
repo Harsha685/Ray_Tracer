@@ -86,7 +86,7 @@ private:
     ray center;                 // Center path: center.at(time) is the center at that time
     double radius;              // Radius, never negative
     shared_ptr<material> mat;   // Surface material, shared with any other object using it
-    aabb bound_box;             // Box enclosing the sphere over its whole motion
+    aabb bound_box;                  // Box enclosing the sphere over its whole motion
 };
 
 #endif // SPHERE_H

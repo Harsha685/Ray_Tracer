@@ -1,8 +1,6 @@
 #ifndef INTERVAL_H
 #define INTERVAL_H
 
-#include "common.h"
-
 // A range of real numbers [min, max]. Used for the allowed t range of a ray and for clamping.
 class interval {
 public:

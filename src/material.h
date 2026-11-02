@@ -3,6 +3,7 @@
 
 #include "color.h"
 #include "hittable.h"
+#include "texture.h"
 
 // Abstract base class describing how a surface responds to an incoming ray.
 class material {
@@ -34,7 +35,12 @@ public:
      * Creates a diffuse material with the given albedo (fraction of light reflected
      * per color channel).
      */
-    lambertian(const color& albedo) : albedo(albedo) {}
+    lambertian(const color& albedo) : tex(make_shared<Solid_color>(albedo)) {}
+
+    /*
+     * Creates a diffuse material whose albedo varies across the surface.
+     */
+    lambertian(shared_ptr<Texture> tex) : tex(tex) {}
 
     /*
      * Scatters the ray in a random direction biased toward the surface normal.
@@ -43,7 +49,7 @@ public:
      *    (Lambertian) distribution.
      *  - If the random vector almost cancels the normal, the direction would be near
      *    zero and cause NaNs later, so the normal is used instead.
-     *  - Always scatters; attenuation is the albedo.
+     *  - Always scatters; attenuation is the texture's color at the hit point.
      */
     bool scatter(const ray& r_in, const hit_record& rec,
                  color& attenuation, ray& scattered) const override {
@@ -53,12 +59,12 @@ public:
             scatter_direction = rec.normal;
 
         scattered = ray(rec.point, scatter_direction, r_in.time());
-        attenuation = albedo;
+        attenuation = tex->value(rec.u, rec.v, rec.point);
         return true;
     }
 
 private:
-    color albedo;   // Fraction of light reflected per color channel
+    shared_ptr<Texture> tex;   // Fraction of light reflected per color channel, by position
 };
 
 // Reflective surface, optionally blurred by a fuzz factor.

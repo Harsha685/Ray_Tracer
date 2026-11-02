@@ -15,6 +15,8 @@ public:
     vector3 normal;             // Unit surface normal at the hit, always pointing against the ray
     point3 point;               // World position where the ray hit the surface
     double t;                   // Ray parameter at the hit: point = origin + t * direction
+    double u = 0;               // Surface texture coordinate; sphere does not compute it yet
+    double v = 0;               // Surface texture coordinate; sphere does not compute it yet
     bool front_face;            // True if the ray hit the outside of the surface
 
     /*

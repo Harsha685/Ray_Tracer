@@ -1,8 +1,12 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-// Shared constants, aliases and random-number helpers. Includes no project headers,
-// so every other header can include it without creating an include cycle.
+// Shared constants, aliases and random-number helpers, plus the headers nearly every
+// file needs (see "Common Headers" at the bottom).
+//
+//  - Every .cpp file must include this header first.
+//  - vec3.h and interval.h use the helpers below but must not include this header:
+//    this header includes them, and the cycle would break the build.
 
 #include <cmath>
 #include <iostream>
@@ -60,5 +64,12 @@ inline int random_int(int min, int max) {
     // Returns a random integer in [min,max].
     return int(random_double(min, max+1));
 }
+
+// Common Headers
+// These stay below the helpers above because vec3.h and interval.h depend on them.
+#include "color.h"
+#include "interval.h"
+#include "ray.h"
+#include "vec3.h"
 
 #endif // COMMON_H
