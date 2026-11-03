@@ -15,12 +15,15 @@ public:
      */
     aabb() {}
 
-    aabb(const interval& x, const interval& y, const interval& z) : x(x), y(y), z(z) {}
+    aabb(const interval& x, const interval& y, const interval& z) : x(x), y(y), z(z) {
+        pad_to_minimums();
+    }
 
     aabb(const point3& a, const point3& b) {
         x = (a[0] <= b[0]) ? interval(a[0], b[0]) : interval(b[0], a[0]);
         y = (a[1] <= b[1]) ? interval(a[1], b[1]) : interval(b[1], a[1]);
         z = (a[2] <= b[2]) ? interval(a[2], b[2]) : interval(b[2], a[2]);
+        pad_to_minimums();
     }
 
     /*
@@ -38,13 +41,13 @@ public:
         return x;
     }
 
-    bool hit_interval(const ray& r, interval i) const{
+    bool hit_interval(const ray& r, interval i) const {
         const point3& ray_orig = r.origin();
-        const vector3& ray_dir  = r.direction();
-        
-        for (int axis = 0; axis<3 ;axis++){
+        const vector3& ray_dir = r.direction();
+
+        for (int axis = 0; axis < 3; axis++) {
             const interval& ax = axis_interval(axis);
-            const double adinv = 1.0 / ray_dir[axis];            
+            const double adinv = 1.0 / ray_dir[axis];
             auto t0 = (ax.min - ray_orig[axis]) * adinv;
             auto t1 = (ax.max - ray_orig[axis]) * adinv;
 
@@ -57,9 +60,19 @@ public:
             }
 
             if (i.max <= i.min)
-                return false;            
+                return false;
         }
         return true;
+    }
+
+private:
+    void pad_to_minimums() {
+        // Adjust the AABB so that no side is narrower than some delta, padding if necessary.
+
+        double delta = 0.0001;
+        if (x.size() < delta) x = x.extend(delta);
+        if (y.size() < delta) y = y.extend(delta);
+        if (z.size() < delta) z = z.extend(delta);
     }
 };
 

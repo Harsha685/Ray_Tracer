@@ -8,16 +8,19 @@
 
 #include "camera.h"
 #include "sphere.h"
+#include "quad.h"
 #include "hittable_list.h"
 
 int main() {
     // Materials
-    auto ground = make_shared<lambertian>(make_shared<noise_texture>(4));  // Perlin marble
+    auto ground = make_shared<lambertian>(color(0.5, 0.5, 0.5));  // Perlin marble
     auto glass  = make_shared<dielectric>(1.5);
     auto earth  = make_shared<lambertian>(make_shared<image_texture>("earth.jpg"));
     auto gold   = make_shared<metal>(color(0.9, 0.7, 0.3), 0.05);
     auto red    = make_shared<lambertian>(color(0.7, 0.12, 0.1));
     auto blue   = make_shared<lambertian>(color(0.1, 0.25, 0.6));
+    auto teal   = make_shared<lambertian>(color(0.2, 0.6, 0.55));
+    auto orange = make_shared<lambertian>(color(0.85, 0.45, 0.15));
 
     // Spheres: position, radius, material
     hittable_list world;
@@ -27,6 +30,10 @@ int main() {
     world.add(make_shared<sphere>(point3(2.4, 0.9, 0), 0.9, gold));
     world.add(make_shared<sphere>(point3(-0.9, 0.4, 1.8), 0.4, red));
     world.add(make_shared<sphere>(point3(1.0, 0.35, 2.1), 0.35, blue));
+
+    // Quad: corner Q, edge u, edge v, material (a backdrop panel behind the spheres)
+    world.add(make_shared<quad>(point3(-3.5, 0, -2.5), vector3(7, 0, 0), vector3(0, 3.5, 0), teal));
+
 
     // Camera
     camera cam;
