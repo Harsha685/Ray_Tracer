@@ -3,6 +3,7 @@
 
 #include "common.h"
 #include "image_loader.h"
+#include "perlin.h"
 
 class Texture {
     public:
@@ -71,4 +72,26 @@ class image_texture : public Texture {
   private:
     image_loader image;
 };
+/*
+ * Marble-like texture driven by Perlin noise.
+ *
+ *  - scale sets the frequency: larger values give tighter stripes.
+ *  - The stripes run along z as a sine wave; turbulence shifts the phase so the
+ *    stripes bend and wander like veins in marble.
+ *  - 0.5 * (1 + sin(...)) maps the sine from [-1, 1] into [0, 1] so it can be used
+ *    directly as a grey level.
+ */
+class noise_texture : public Texture {
+  public:
+    noise_texture(double scale) : scale(scale) {}
+
+    color value(double /*u*/, double /*v*/, const point3& p) const override {
+        return color(0.5, 0.5, 0.5) * (1 + std::sin(scale * p.z() + 10 * noise.turb(p, 7)));
+    }
+
+  private:
+    perlin noise;
+    double scale;
+};
+
 #endif //TEXTURE_H

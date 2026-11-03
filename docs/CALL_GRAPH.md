@@ -13,9 +13,25 @@ flowchart TD
 
     subgraph scene["Scene setup (main.cpp)"]
         add["hittable_list::add()"]
-        sphere_ctor["sphere() constructors"]
+        sphere_ctor["sphere() constructor"]
         mat_ctors["lambertian() / metal() / dielectric()"]
-        vec_random["vector3::random()<br/>vector3::random(min, max)"]
+        tex_ctors["noise_texture() / image_texture()"]
+    end
+
+    subgraph build["Construction helpers"]
+        solid_ctor["Solid_color()"]
+        aabb_pts["aabb(point3, point3)"]
+        aabb_boxes["aabb(aabb, aabb)"]
+        interval_join["interval(interval, interval)"]
+        sphere_bbox["sphere::bounding_box()"]
+        perlin_ctor["perlin()"]
+        gen_perm["perlin::perlin_generate_perm()"]
+        permute["perlin::permute()"]
+        img_ctor["image_loader(filename)"]
+        img_load["image_loader::load()"]
+        stbi["stbi_loadf()"]
+        to_bytes["image_loader::convert_to_bytes()"]
+        f2b["image_loader::float_to_byte()"]
     end
 
     subgraph cam["camera.h"]
@@ -30,6 +46,7 @@ flowchart TD
     subgraph hit["Intersection"]
         list_hit["hittable_list::hit()"]
         sphere_hit["sphere::hit()"]
+        sphere_uv["sphere::get_sphere_uv()"]
         surrounds["interval::surrounds()"]
         ray_at["ray::at()"]
         face_normal["hit_record::set_face_normal()"]
@@ -40,6 +57,17 @@ flowchart TD
         met["metal::scatter()"]
         die["dielectric::scatter()"]
         reflectance["dielectric::reflectance()"]
+    end
+
+    subgraph tex["texture.h / perlin.h / image_loader.h"]
+        solid_val["Solid_color::value()"]
+        noise_val["noise_texture::value()"]
+        image_val["image_texture::value()"]
+        turb["perlin::turb()"]
+        noise["perlin::noise()"]
+        interp["perlin::perlin_interp()"]
+        pixel_data["image_loader::pixel_data()"]
+        img_clamp["image_loader::clamp()"]
     end
 
     subgraph out["color.h"]
@@ -56,23 +84,42 @@ flowchart TD
         dot["dot()"]
         rand_unit["random_unit_vector()"]
         rand_disk["random_in_unit_disk()"]
+        vec_random["vector3::random(min, max)"]
         near_zero["vector3::near_zero()"]
         reflect["reflect()"]
         refract["refract()"]
         deg2rad["degrees_to_radians()"]
         rand_d["random_double()"]
         rand_d_range["random_double(min, max)"]
+        rand_int["random_int()"]
     end
 
     %% main
-    main --> add
-    main --> sphere_ctor
     main --> mat_ctors
-    main --> vec_random
-    main --> rand_d
-    main --> rand_d_range
-    main --> length
+    main --> tex_ctors
+    main --> sphere_ctor
+    main --> add
     main --> render
+
+    %% scene construction
+    mat_ctors -- "lambertian(color)" --> solid_ctor
+    tex_ctors -- "noise_texture" --> perlin_ctor
+    tex_ctors -- "image_texture" --> img_ctor
+    sphere_ctor --> aabb_pts
+    add -. "obj->bounding_box()" .-> sphere_bbox
+    add --> aabb_boxes
+    aabb_boxes --> interval_join
+
+    perlin_ctor --> vec_random
+    perlin_ctor --> unit_vector
+    perlin_ctor --> gen_perm
+    gen_perm --> permute
+    permute --> rand_int
+
+    img_ctor --> img_load
+    img_load --> stbi
+    img_load --> to_bytes
+    to_bytes --> f2b
 
     %% camera
     render --> initialize
@@ -86,7 +133,7 @@ flowchart TD
 
     get_ray --> sample_square
     get_ray --> defocus
-    get_ray --> rand_d
+    get_ray -- "ray time" --> rand_d
     sample_square --> rand_d
     defocus --> rand_disk
 
@@ -99,16 +146,20 @@ flowchart TD
 
     %% intersection
     list_hit -. "object->hit()" .-> sphere_hit
-    sphere_hit -- "center.at(time)" --> ray_at
+    sphere_hit -- "center.at(time), r.at(t)" --> ray_at
     sphere_hit --> length_sq
     sphere_hit --> dot
     sphere_hit --> surrounds
     sphere_hit --> face_normal
+    sphere_hit --> sphere_uv
     face_normal --> dot
 
     %% materials
     lam --> rand_unit
     lam --> near_zero
+    lam -. "tex->value()" .-> solid_val
+    lam -. "tex->value()" .-> noise_val
+    lam -. "tex->value()" .-> image_val
     met --> reflect
     met --> unit_vector
     met --> rand_unit
@@ -119,6 +170,15 @@ flowchart TD
     die --> rand_d
     die --> reflect
     die --> refract
+
+    %% textures
+    noise_val --> turb
+    turb --> noise
+    noise --> interp
+    interp --> dot
+    image_val --> clamp
+    image_val --> pixel_data
+    pixel_data --> img_clamp
 
     %% output
     write_color --> gamma
@@ -134,8 +194,8 @@ flowchart TD
     rand_unit --> length_sq
     rand_disk --> rand_d_range
     rand_disk --> length_sq
-    vec_random --> rand_d
     vec_random --> rand_d_range
+    rand_int --> rand_d_range
     rand_d_range --> rand_d
 ```
 
@@ -148,9 +208,15 @@ flowchart LR
     render["render()"] --> get_ray["get_ray()"] --> ray_color["ray_color()"]
     ray_color --> list_hit["hittable_list::hit()"] --> sphere_hit["sphere::hit()<br/>(once per object)"]
     ray_color --> scatter["material::scatter()"] --> ray_color
+    scatter --> value["Texture::value()<br/>(lambertian only; noise_texture runs 7 octaves of Perlin noise)"]
     render --> write_color["write_color()"]
 ```
 
-Not shown: `random_on_hemisphere()`, `interval::contains()`, `interval::size()`,
-`hittable_list::clear()` and the ray/interval constants exist but are never called by
-the renderer.
+Not shown: these exist but the current `main()` never reaches them:
+
+- `bvh_node` (its constructors, `hit()`, `box_compare()`) and `aabb::hit_interval()` /
+  `aabb::axis_interval()`. `main()` renders the `hittable_list` directly and never builds a BVH.
+- `checker_texture`, the moving-sphere constructor, and the `hittable_list(obj)` constructor.
+- `random_on_hemisphere()`, `vector3::random()` (no-argument), `interval::contains()`,
+  `interval::size()`, `interval::extend()`, `hittable_list::clear()`, and the
+  `interval::empty` / `interval::universe` constants.

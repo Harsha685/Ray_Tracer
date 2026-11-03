@@ -248,6 +248,27 @@ Private data: `center` (a `ray`; `center.at(time)` is the center at that time), 
 | `checker_texture(double scale, const color& c1, const color& c2)` | Same, from two solid colors |
 | `color value(...) const` | Picks a texture by whether the cell indices of `p` sum to an even number |
 
+### class `noise_texture : Texture`
+
+| Member | Purpose |
+|--------|---------|
+| `noise_texture(double scale)` | Marble texture; `scale` sets the stripe frequency |
+| `color value(...) const` | Grey level `0.5 * (1 + sin(scale * p.z + 10 * turb(p)))`; ignores `u, v` |
+
+---
+
+## perlin.h
+
+### class `perlin`
+
+| Member | Purpose |
+|--------|---------|
+| `perlin()` | Builds 256 random unit gradient vectors and three shuffled permutation tables |
+| `double noise(const point3& p) const` | Smooth gradient noise at `p`, roughly in [-1, 1]; 0 at integer lattice points |
+| `double turb(const point3& p, int depth = 7) const` | `|sum of depth octaves|`, each octave at double frequency and half weight |
+
+Private helpers: `perlin_generate_perm` (fill and shuffle a table), `permute` (Fisher-Yates), `perlin_interp` (Hermite-smoothed trilinear blend of the 8 corner gradients).
+
 ---
 
 ## material.h

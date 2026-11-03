@@ -12,7 +12,7 @@
 
 int main() {
     // Materials
-    auto ground = make_shared<lambertian>(color(0.55, 0.55, 0.5));
+    auto ground = make_shared<lambertian>(make_shared<noise_texture>(4));  // Perlin marble
     auto glass  = make_shared<dielectric>(1.5);
     auto earth  = make_shared<lambertian>(make_shared<image_texture>("earth.jpg"));
     auto gold   = make_shared<metal>(color(0.9, 0.7, 0.3), 0.05);

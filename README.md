@@ -60,7 +60,8 @@ raytracer/
 │   ├── hittable.h       # hit_record and the abstract hittable class
 │   ├── hittable_list.h  # a list of hittables treated as one object
 │   ├── sphere.h         # ray-sphere intersection
-│   ├── texture.h        # solid color and checker textures
+│   ├── texture.h        # solid color, checker, image and noise textures
+│   ├── perlin.h         # Perlin noise and turbulence
 │   ├── material.h       # lambertian, metal and dielectric materials
 │   ├── camera.h         # camera setup, ray generation and the render loop
 │   ├── main.cpp         # scene setup
