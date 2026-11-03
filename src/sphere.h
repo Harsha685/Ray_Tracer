@@ -74,6 +74,7 @@ public:
         rec.point = r.at(rec.t);
         vector3 outward_normal = (rec.point - current_center) / radius;  // Dividing by radius makes it unit length
         rec.set_face_normal(r, outward_normal);
+        get_sphere_uv(outward_normal, rec.u, rec.v);  // The unit outward normal is the hit point on a unit sphere
         rec.mat = mat;
 
         // 6. Report a successful hit
@@ -87,6 +88,20 @@ private:
     double radius;              // Radius, never negative
     shared_ptr<material> mat;   // Surface material, shared with any other object using it
     aabb bound_box;                  // Box enclosing the sphere over its whole motion
+    static void get_sphere_uv(const point3& p, double& u, double& v) {
+        // p: a given point on the sphere of radius one, centered at the origin.
+        // u: returned value [0,1] of angle around the Y axis from X=-1.
+        // v: returned value [0,1] of angle from Y=-1 to Y=+1.
+        //     <1 0 0> yields <0.50 0.50>       <-1  0  0> yields <0.00 0.50>
+        //     <0 1 0> yields <0.50 1.00>       < 0 -1  0> yields <0.50 0.00>
+        //     <0 0 1> yields <0.25 0.50>       < 0  0 -1> yields <0.75 0.50>
+
+        auto theta = std::acos(-p.y());
+        auto phi = std::atan2(-p.z(), p.x()) + pi;
+
+        u = phi / (2*pi);
+        v = theta / pi;
+    }
 };
 
 #endif // SPHERE_H
