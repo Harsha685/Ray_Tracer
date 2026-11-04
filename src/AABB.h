@@ -76,4 +76,15 @@ private:
     }
 };
 
+/*
+ * Returns the box translated by offset (each axis interval is shifted by that axis's component).
+ */
+inline aabb operator+(const aabb& bbox, const vector3& offset) {
+    return aabb(bbox.x + offset.x(), bbox.y + offset.y(), bbox.z + offset.z());
+}
+
+inline aabb operator+(const vector3& offset, const aabb& bbox) {
+    return bbox + offset;
+}
+
 #endif // AABB_H

@@ -15,6 +15,14 @@ public:
     virtual ~material() = default;
 
     /*
+     * Light given off by the surface at texture coordinates (u, v) / point p.
+     * Most materials emit nothing, so the default is black.
+     */
+    virtual color emitted(double /*u*/, double /*v*/, const point3& /*p*/) const {
+        return color(0, 0, 0);
+    }
+
+    /*
      * Decides what happens to ray r_in when it hits the surface described by rec.
      *
      *  - Returns true if the ray bounces: scattered is set to the new ray and
@@ -159,6 +167,21 @@ private:
         r0 = r0 * r0;
         return r0 + (1 - r0) * std::pow((1 - cosine), 5);
     }
+};
+
+// Light-emitting surface. Emits its texture's color and never scatters (inherits the
+// default scatter(), which absorbs every incoming ray).
+class diffuse_light : public material {
+    public:
+        diffuse_light(shared_ptr<Texture> tex) : tex(tex) {}
+        diffuse_light(const color& emit) : tex(make_shared<Solid_color>(emit)) {}
+
+        color emitted(double u, double v, const point3& p) const override {
+            return tex->value(u, v, p);
+        }
+
+    private:
+        shared_ptr<Texture> tex;
 };
 
 #endif // MATERIAL_H

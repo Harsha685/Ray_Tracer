@@ -76,4 +76,15 @@ public:
 inline const interval interval::empty    = interval(+infinity, -infinity);  // Contains nothing
 inline const interval interval::universe = interval(-infinity, +infinity);  // Contains every number
 
+/*
+ * Returns the interval shifted by displacement (both endpoints move by the same amount).
+ */
+inline interval operator+(const interval& ival, double displacement) {
+    return interval(ival.min + displacement, ival.max + displacement);
+}
+
+inline interval operator+(double displacement, const interval& ival) {
+    return ival + displacement;
+}
+
 #endif // INTERVAL_H
