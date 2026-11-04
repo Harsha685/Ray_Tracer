@@ -38,3 +38,5 @@ The main guide for the project, by Peter Shirley, Trevor David Black and Steve H
 - [PPM image format (Netpbm)](https://netpbm.sourceforge.net/doc/ppm.html) — the
   output format written by the renderer
 - [ImageMagick](https://imagemagick.org/) — converts the PPM output to PNG
+- [stb_image](https://github.com/nothings/stb) — single-header image loader used for
+  image textures (`src/external/stb_image.h`)

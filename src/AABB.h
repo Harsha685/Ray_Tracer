@@ -15,10 +15,17 @@ public:
      */
     aabb() {}
 
+    /*
+     * Creates a box from one interval per axis, padded so no side is thinner than 0.0001.
+     */
     aabb(const interval& x, const interval& y, const interval& z) : x(x), y(y), z(z) {
         pad_to_minimums();
     }
 
+    /*
+     * Creates the box with opposite corners a and b (in any order), padded so no side is
+     * thinner than 0.0001.
+     */
     aabb(const point3& a, const point3& b) {
         x = (a[0] <= b[0]) ? interval(a[0], b[0]) : interval(b[0], a[0]);
         y = (a[1] <= b[1]) ? interval(a[1], b[1]) : interval(b[1], a[1]);
@@ -35,12 +42,26 @@ public:
         z = interval(box0.z, box1.z);
     }
 
+    /*
+     * Returns the box's interval on axis n (0 = x, 1 = y, 2 = z).
+     */
     const interval& axis_interval(int n) const {
         if (n == 1) return y;
         if (n == 2) return z;
         return x;
     }
 
+    /*
+     * Returns true if ray r passes through the box at some t inside the interval i
+     * (the slab method).
+     *
+     *  - Per axis, the box is the slab between two parallel planes. The ray crosses
+     *    them at t0 = (min - origin) / direction and t1 = (max - origin) / direction.
+     *  - A negative direction swaps which plane is crossed first, hence the t0 < t1 check.
+     *  - Each axis narrows i to the t range spent inside that slab. The ray is inside the
+     *    box only where all three ranges overlap, so an empty i means a miss.
+     *  - Dividing by a zero direction gives +-infinity, which the comparisons handle.
+     */
     bool hit_interval(const ray& r, interval i) const {
         const point3& ray_orig = r.origin();
         const vector3& ray_dir = r.direction();
@@ -66,9 +87,13 @@ public:
     }
 
 private:
+    /*
+     * Widens any side thinner than delta.
+     *
+     *  - A flat object (e.g. an axis-aligned quad) would otherwise get a box of zero
+     *    thickness, which the slab test in hit_interval() can miss.
+     */
     void pad_to_minimums() {
-        // Adjust the AABB so that no side is narrower than some delta, padding if necessary.
-
         double delta = 0.0001;
         if (x.size() < delta) x = x.extend(delta);
         if (y.size() < delta) y = y.extend(delta);

@@ -15,7 +15,7 @@
  *  - Output is roughly in [-1, 1]; it is exactly 0 at every integer lattice point.
  */
 class perlin {
-  public:
+public:
     /*
      * Builds the gradient table and three independent permutation tables.
      *
@@ -77,7 +77,7 @@ class perlin {
         return std::fabs(accum);
     }
 
-  private:
+private:
     static const int point_count = 256;
     vector3 randvec[point_count];
     int perm_x[point_count];

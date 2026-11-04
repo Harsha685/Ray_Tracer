@@ -71,9 +71,16 @@ inline double random_double(double min, double max) {
     return min + (max - min) * random_double();
 }
 
+/*
+ * Returns a uniformly distributed random integer in [min, max] (both ends included).
+ *
+ *  - Draws a real number in [min, max + 1) and rounds it down, so each integer gets
+ *    an equal-width slice of that range.
+ *  - std::floor instead of a plain int() cast: int() rounds toward zero, which would
+ *    fold the slices for -0.x and 0.x together when min is negative.
+ */
 inline int random_int(int min, int max) {
-    // Returns a random integer in [min,max].
-    return int(random_double(min, max+1));
+    return int(std::floor(random_double(min, max + 1)));
 }
 
 // Common Headers
