@@ -4,6 +4,7 @@
 #include "common.h"
 #include "hittable.h"
 #include "material.h"
+
 // A sphere defined by a center, a radius, and the material of its surface.
 class sphere : public hittable {
 public:
@@ -13,10 +14,11 @@ public:
      *  - A negative radius makes no sense, so it is clamped to 0 with std::fmax.
      */
     sphere(const point3& static_center, double radius, shared_ptr<material> mat)
-        : center(static_center, vector3(0, 0, 0)), radius(std::fmax(0, radius)), mat(mat) {
-            auto rvec = vector3(radius, radius, radius);
-            bound_box = aabb(static_center - rvec, static_center + rvec);
-        }
+        : center(static_center, vector3(0, 0, 0)), radius(std::fmax(0, radius)), mat(mat)
+    {
+        auto rvec = vector3(radius, radius, radius);
+        bound_box = aabb(static_center - rvec, static_center + rvec);
+    }
 
     /*
      * Creates a moving sphere whose center travels from center1 at time 0 to center2
@@ -87,19 +89,24 @@ private:
     ray center;                 // Center path: center.at(time) is the center at that time
     double radius;              // Radius, never negative
     shared_ptr<material> mat;   // Surface material, shared with any other object using it
-    aabb bound_box;                  // Box enclosing the sphere over its whole motion
-    static void get_sphere_uv(const point3& p, double& u, double& v) {
-        // p: a given point on the sphere of radius one, centered at the origin.
-        // u: returned value [0,1] of angle around the Y axis from X=-1.
-        // v: returned value [0,1] of angle from Y=-1 to Y=+1.
-        //     <1 0 0> yields <0.50 0.50>       <-1  0  0> yields <0.00 0.50>
-        //     <0 1 0> yields <0.50 1.00>       < 0 -1  0> yields <0.50 0.00>
-        //     <0 0 1> yields <0.25 0.50>       < 0  0 -1> yields <0.75 0.50>
+    aabb bound_box;             // Box enclosing the sphere over its whole motion
 
+    /*
+     * Converts a point p on the unit sphere (centered at the origin) to texture
+     * coordinates (u, v), both in [0, 1].
+     *
+     *  - theta is the angle up from the bottom pole (y = -1): v = theta / pi, so v = 0
+     *    at the bottom pole and 1 at the top.
+     *  - phi is the angle around the y-axis starting from x = -1: u = phi / (2 * pi).
+     *  - Examples: (1, 0, 0) -> (0.50, 0.50), (-1, 0, 0) -> (0.00, 0.50),
+     *    (0, 1, 0) -> (0.50, 1.00), (0, -1, 0) -> (0.50, 0.00),
+     *    (0, 0, 1) -> (0.25, 0.50), (0, 0, -1) -> (0.75, 0.50).
+     */
+    static void get_sphere_uv(const point3& p, double& u, double& v) {
         auto theta = std::acos(-p.y());
         auto phi = std::atan2(-p.z(), p.x()) + pi;
 
-        u = phi / (2*pi);
+        u = phi / (2 * pi);
         v = theta / pi;
     }
 };

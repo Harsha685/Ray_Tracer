@@ -15,8 +15,8 @@ public:
     vector3 normal;             // Unit surface normal at the hit, always pointing against the ray
     point3 point;               // World position where the ray hit the surface
     double t;                   // Ray parameter at the hit: point = origin + t * direction
-    double u = 0;               // Surface texture coordinate
-    double v = 0;               // Surface texture coordinate
+    double u = 0;               // Surface texture coordinate, set by every shape
+    double v = 0;               // Surface texture coordinate, set by every shape
     bool front_face;            // True if the ray hit the outside of the surface
 
     /*
@@ -38,7 +38,7 @@ public:
     }
 };
 
-// Abstract base class for anything a ray can hit (spheres, lists of objects, ...)
+// Abstract base class for anything a ray can hit (shapes, lists, BVH nodes, instances, ...)
 class hittable {
 public:
     /*
@@ -65,113 +65,141 @@ public:
     virtual aabb bounding_box() const = 0;
 };
 
-// Wraps an object and moves it by offset.
+// Instance that moves another object by offset without copying its geometry.
 class translate : public hittable {
-    public:
-        translate(shared_ptr<hittable> object, const vector3& offset)
-            : object(object), offset(offset)
-        {
-            bbox = object->bounding_box() + offset;
-        }
+public:
+    /*
+     * Wraps object so it appears shifted by offset. The bounding box is shifted once here.
+     */
+    translate(shared_ptr<hittable> object, const vector3& offset)
+        : object(object), offset(offset)
+    {
+        bbox = object->bounding_box() + offset;
+    }
 
-        bool hit(const ray& r, interval ray_t, hit_record& rec) const override{
-            ray offset_r(r.origin() - offset, r.direction(), r.time());
+    /*
+     * Moving the object by +offset is the same as moving the ray by -offset.
+     *
+     *  - The ray's origin is shifted by -offset and tested against the original object.
+     *  - On a hit, the hit point is shifted back by +offset into world space.
+     *  - t, the normal and front_face need no change: translation keeps directions.
+     */
+    bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
+        ray offset_r(r.origin() - offset, r.direction(), r.time());
 
-            if (!object->hit(offset_r, ray_t, rec))
-                return false;
+        if (!object->hit(offset_r, ray_t, rec))
+            return false;
 
-            rec.point += offset;
+        rec.point += offset;
 
-            return true;
-        }
+        return true;
+    }
 
-        aabb bounding_box() const override { return bbox; }
+    aabb bounding_box() const override { return bbox; }
 
-    private:
-        shared_ptr<hittable> object;
-        vector3 offset;
-        aabb bbox;
+private:
+    shared_ptr<hittable> object;  // The object being moved
+    vector3 offset;               // How far it is moved
+    aabb bbox;                    // Object's box shifted by offset
 };
 
-// Wraps an object and rotates it by angle degrees around the y-axis (through the world origin).
+// Instance that rotates another object by angle degrees around the y-axis.
+// The pivot is the world origin, so build the object at the origin, rotate it, then
+// translate it into place.
 class rotate_y : public hittable {
-    public:
-        rotate_y(shared_ptr<hittable> object, double angle) : object(object) {
-            auto radians = degrees_to_radians(angle);
-            sin_theta = std::sin(radians);
-            cos_theta = std::cos(radians);
-            bbox = object->bounding_box();
+public:
+    /*
+     * Wraps object so it appears rotated by angle degrees around the y-axis.
+     *
+     *  - Stores sin and cos of the angle so hit() does no trigonometry.
+     *  - The bounding box is found by rotating all 8 corners of the object's box and
+     *    taking the box that encloses them. This box can be larger than the rotated
+     *    object, but never smaller.
+     */
+    rotate_y(shared_ptr<hittable> object, double angle) : object(object) {
+        auto radians = degrees_to_radians(angle);
+        sin_theta = std::sin(radians);
+        cos_theta = std::cos(radians);
+        bbox = object->bounding_box();
 
-            // Rotate all 8 corners of the object's box and take the box enclosing them.
-            point3 min( infinity,  infinity,  infinity);
-            point3 max(-infinity, -infinity, -infinity);
+        point3 min( infinity,  infinity,  infinity);
+        point3 max(-infinity, -infinity, -infinity);
 
-            for (int i = 0; i < 2; i++) {
-                for (int j = 0; j < 2; j++) {
-                    for (int k = 0; k < 2; k++) {
-                        auto x = i * bbox.x.max + (1 - i) * bbox.x.min;
-                        auto y = j * bbox.y.max + (1 - j) * bbox.y.min;
-                        auto z = k * bbox.z.max + (1 - k) * bbox.z.min;
+        for (int i = 0; i < 2; i++) {
+            for (int j = 0; j < 2; j++) {
+                for (int k = 0; k < 2; k++) {
+                    // i, j, k pick the min or max end of each axis: one of the 8 corners
+                    auto x = i * bbox.x.max + (1 - i) * bbox.x.min;
+                    auto y = j * bbox.y.max + (1 - j) * bbox.y.min;
+                    auto z = k * bbox.z.max + (1 - k) * bbox.z.min;
 
-                        auto newx =  cos_theta * x + sin_theta * z;
-                        auto newz = -sin_theta * x + cos_theta * z;
+                    auto newx =  cos_theta * x + sin_theta * z;
+                    auto newz = -sin_theta * x + cos_theta * z;
 
-                        vector3 tester(newx, y, newz);
+                    vector3 tester(newx, y, newz);
 
-                        for (int c = 0; c < 3; c++) {
-                            min[c] = std::fmin(min[c], tester[c]);
-                            max[c] = std::fmax(max[c], tester[c]);
-                        }
+                    for (int c = 0; c < 3; c++) {
+                        min[c] = std::fmin(min[c], tester[c]);
+                        max[c] = std::fmax(max[c], tester[c]);
                     }
                 }
             }
-
-            bbox = aabb(min, max);
         }
 
-        bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
-            // Transform the ray from world space to object space (rotate by -angle).
-            auto origin = point3(
-                (cos_theta * r.origin().x()) - (sin_theta * r.origin().z()),
-                r.origin().y(),
-                (sin_theta * r.origin().x()) + (cos_theta * r.origin().z())
-            );
+        bbox = aabb(min, max);
+    }
 
-            auto direction = vector3(
-                (cos_theta * r.direction().x()) - (sin_theta * r.direction().z()),
-                r.direction().y(),
-                (sin_theta * r.direction().x()) + (cos_theta * r.direction().z())
-            );
+    /*
+     * Rotating the object by +angle is the same as rotating the ray by -angle.
+     *
+     *  - The ray's origin and direction are rotated by -angle into object space and
+     *    tested against the original object.
+     *  - On a hit, the hit point and normal are rotated by +angle back into world space.
+     *  - t needs no change, and neither does front_face: rotation preserves the dot
+     *    product between the ray direction and the normal.
+     */
+    bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
+        // World space -> object space (rotate by -angle)
+        auto origin = point3(
+            (cos_theta * r.origin().x()) - (sin_theta * r.origin().z()),
+            r.origin().y(),
+            (sin_theta * r.origin().x()) + (cos_theta * r.origin().z())
+        );
 
-            ray rotated_r(origin, direction, r.time());
+        auto direction = vector3(
+            (cos_theta * r.direction().x()) - (sin_theta * r.direction().z()),
+            r.direction().y(),
+            (sin_theta * r.direction().x()) + (cos_theta * r.direction().z())
+        );
 
-            // Determine whether an intersection exists in object space (and if so, where).
-            if (!object->hit(rotated_r, ray_t, rec))
-                return false;
+        ray rotated_r(origin, direction, r.time());
 
-            // Transform the intersection from object space back to world space (rotate by +angle).
-            rec.point = point3(
-                (cos_theta * rec.point.x()) + (sin_theta * rec.point.z()),
-                rec.point.y(),
-                (-sin_theta * rec.point.x()) + (cos_theta * rec.point.z())
-            );
+        if (!object->hit(rotated_r, ray_t, rec))
+            return false;
 
-            rec.normal = vector3(
-                (cos_theta * rec.normal.x()) + (sin_theta * rec.normal.z()),
-                rec.normal.y(),
-                (-sin_theta * rec.normal.x()) + (cos_theta * rec.normal.z())
-            );
+        // Object space -> world space (rotate by +angle)
+        rec.point = point3(
+            (cos_theta * rec.point.x()) + (sin_theta * rec.point.z()),
+            rec.point.y(),
+            (-sin_theta * rec.point.x()) + (cos_theta * rec.point.z())
+        );
 
-            return true;
-        }
+        rec.normal = vector3(
+            (cos_theta * rec.normal.x()) + (sin_theta * rec.normal.z()),
+            rec.normal.y(),
+            (-sin_theta * rec.normal.x()) + (cos_theta * rec.normal.z())
+        );
 
-        aabb bounding_box() const override { return bbox; }
+        return true;
+    }
 
-    private:
-        shared_ptr<hittable> object;
-        double sin_theta;
-        double cos_theta;
-        aabb bbox;
+    aabb bounding_box() const override { return bbox; }
+
+private:
+    shared_ptr<hittable> object;  // The object being rotated
+    double sin_theta;             // sin of the rotation angle
+    double cos_theta;             // cos of the rotation angle
+    aabb bbox;                    // Box enclosing the rotated object
 };
 
 #endif // HITTABLE_H

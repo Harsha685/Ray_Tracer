@@ -172,16 +172,56 @@ private:
 // Light-emitting surface. Emits its texture's color and never scatters (inherits the
 // default scatter(), which absorbs every incoming ray).
 class diffuse_light : public material {
-    public:
-        diffuse_light(shared_ptr<Texture> tex) : tex(tex) {}
-        diffuse_light(const color& emit) : tex(make_shared<Solid_color>(emit)) {}
+public:
+    /*
+     * Creates a light whose emitted color comes from tex.
+     */
+    diffuse_light(shared_ptr<Texture> tex) : tex(tex) {}
 
-        color emitted(double u, double v, const point3& p) const override {
-            return tex->value(u, v, p);
-        }
+    /*
+     * Creates a light of a single color. Values above 1 make it bright enough to
+     * light up the surfaces around it.
+     */
+    diffuse_light(const color& emit) : tex(make_shared<Solid_color>(emit)) {}
 
-    private:
-        shared_ptr<Texture> tex;
+    /*
+     * Returns the texture's color at the hit point as the emitted light.
+     */
+    color emitted(double u, double v, const point3& p) const override {
+        return tex->value(u, v, p);
+    }
+
+private:
+    shared_ptr<Texture> tex;   // Emitted color, by position
+};
+
+// Phase function for participating media (smoke, fog, mist). Scatters the ray in a
+// uniformly random direction, independent of the incoming direction and of any normal.
+class isotropic : public material {
+public:
+    /*
+     * Creates an isotropic material of a single color.
+     */
+    isotropic(const color& albedo) : tex(make_shared<Solid_color>(albedo)) {}
+
+    /*
+     * Creates an isotropic material whose color comes from tex.
+     */
+    isotropic(shared_ptr<Texture> tex) : tex(tex) {}
+
+    /*
+     * Always scatters: the new ray starts at the scattering point inside the medium
+     * and heads off in a random unit direction. Attenuation is the texture's color.
+     */
+    bool scatter(const ray& r_in, const hit_record& rec,
+                 color& attenuation, ray& scattered) const override {
+        scattered = ray(rec.point, random_unit_vector(), r_in.time());
+        attenuation = tex->value(rec.u, rec.v, rec.point);
+        return true;
+    }
+
+private:
+    shared_ptr<Texture> tex;   // Fraction of light kept per color channel at each scatter
 };
 
 #endif // MATERIAL_H
