@@ -8,18 +8,22 @@ block comment above each function.
 Header dependency order, from lowest to highest level:
 
 ```
-common.h  ->  interval.h, vec3.h, color.h, ray.h
+common.h helpers  ->  interval.h, vec3.h  ->  color.h, ray.h
 hittable.h  ->  hittable_list.h, material.h  ->  sphere.h  ->  camera.h  ->  main.cpp
 ```
 
-`common.h` is the umbrella header. Including it pulls in `interval.h`,
-`color.h`, `ray.h` and `vec3.h`.
+`common.h` defines its helpers first, then includes `color.h`, `interval.h`,
+`ray.h` and `vec3.h` at the bottom, so including it gives a file all of those.
+Every `.cpp` file must include `common.h` first. `vec3.h` and `interval.h` use its
+helpers but do not include it, which avoids an include cycle, so they and the
+headers built on them cannot be compiled on their own.
 
 ---
 
 ## common.h
 
-Shared includes, constants and random-number utilities.
+Shared includes, aliases, constants, random-number utilities and the common
+project headers.
 
 ### Aliases
 
@@ -146,14 +150,17 @@ A 3-component vector of doubles, used for points, directions and colors.
 
 ### class `ray`
 
-A half-line P(t) = origin + t * direction.
+A half-line P(t) = origin + t * direction that exists at a moment in time
+(used for motion blur).
 
 | Member | Purpose |
 |--------|---------|
-| `ray()` | Zero origin and direction |
-| `ray(const point3& origin, const vector3& direction)` | Ray from origin along direction |
+| `ray()` | Zero origin and direction, time 0 |
+| `ray(const point3& origin, const vector3& direction, double time)` | Ray from origin along direction at the given time |
+| `ray(const point3& origin, const vector3& direction)` | Ray from origin along direction at time 0 |
 | `const point3& origin() const` | Starting point |
 | `const vector3& direction() const` | Direction (not normalized) |
+| `double time() const` | Moment in time the ray exists at |
 | `point3 at(double t) const` | Point at parameter t |
 
 ---
@@ -170,6 +177,7 @@ Data describing a single ray/surface intersection.
 | `vector3 normal` | Unit normal, always facing against the incoming ray |
 | `point3 point` | World-space hit position |
 | `double t` | Ray parameter at the hit |
+| `double u, v` | Surface texture coordinates; default to 0 because `sphere` does not compute them yet |
 | `bool front_face` | True if the ray hit the outside of the surface |
 | `void set_face_normal(const ray& r, const vector3& outward_normal)` | Sets `normal` and `front_face` from a unit outward normal |
 
@@ -207,10 +215,59 @@ A collection of objects treated as a single hittable (the scene).
 
 | Member | Purpose |
 |--------|---------|
-| `sphere(const point3& center, double radius, shared_ptr<material> mat)` | Sphere with the given center, radius (clamped to >= 0) and material |
+| `sphere(const point3& static_center, double radius, shared_ptr<material> mat)` | Stationary sphere with the given center, radius (clamped to >= 0) and material |
+| `sphere(const point3& center1, const point3& center2, double radius, shared_ptr<material> mat)` | Moving sphere whose center travels from `center1` at time 0 to `center2` at time 1 |
 | `bool hit(const ray&, interval, hit_record&) const` | Ray-sphere intersection via the simplified quadratic formula |
 
-Private data: `center`, `radius`, `mat`.
+Private data: `center` (a `ray`; `center.at(time)` is the center at that time), `radius`, `mat`.
+
+---
+
+## texture.h
+
+### class `Texture` (abstract)
+
+| Member | Purpose |
+|--------|---------|
+| `virtual ~Texture()` | Virtual destructor |
+| `virtual color value(double u, double v, const point3& p) const` | Returns the color at surface coordinates `(u, v)` and world position `p` |
+
+### class `Solid_color : Texture`
+
+| Member | Purpose |
+|--------|---------|
+| `Solid_color(const color& albedo)` | Texture with a single color |
+| `Solid_color(double red, double green, double blue)` | Same, from separate channels |
+| `color value(...) const` | Returns the color, ignoring all arguments |
+
+### class `checker_texture : Texture`
+
+| Member | Purpose |
+|--------|---------|
+| `checker_texture(double scale, shared_ptr<Texture> even, shared_ptr<Texture> odd)` | 3D checker of two textures with cells of side `scale` |
+| `checker_texture(double scale, const color& c1, const color& c2)` | Same, from two solid colors |
+| `color value(...) const` | Picks a texture by whether the cell indices of `p` sum to an even number |
+
+### class `noise_texture : Texture`
+
+| Member | Purpose |
+|--------|---------|
+| `noise_texture(double scale)` | Marble texture; `scale` sets the stripe frequency |
+| `color value(...) const` | Grey level `0.5 * (1 + sin(scale * p.z + 10 * turb(p)))`; ignores `u, v` |
+
+---
+
+## perlin.h
+
+### class `perlin`
+
+| Member | Purpose |
+|--------|---------|
+| `perlin()` | Builds 256 random unit gradient vectors and three shuffled permutation tables |
+| `double noise(const point3& p) const` | Smooth gradient noise at `p`, roughly in [-1, 1]; 0 at integer lattice points |
+| `double turb(const point3& p, int depth = 7) const` | `|sum of depth octaves|`, each octave at double frequency and half weight |
+
+Private helpers: `perlin_generate_perm` (fill and shuffle a table), `permute` (Fisher-Yates), `perlin_interp` (Hermite-smoothed trilinear blend of the 8 corner gradients).
 
 ---
 
@@ -230,6 +287,7 @@ Diffuse (matte) surface.
 | Member | Purpose |
 |--------|---------|
 | `lambertian(const color& albedo)` | Diffuse material with the given reflectance |
+| `lambertian(shared_ptr<Texture> tex)` | Diffuse material whose reflectance comes from a texture |
 | `bool scatter(...) const` | Scatters along `normal + random_unit_vector()` (cosine-weighted); falls back to the normal if degenerate |
 
 ### class `metal : material`
@@ -257,8 +315,8 @@ Transparent surface (glass, water).
 
 ### class `camera`
 
-Positionable camera with antialiasing and defocus blur that renders on multiple
-threads. Configure the public fields, then call `render()`.
+Positionable camera with antialiasing, defocus blur and motion blur that renders on
+multiple threads. Configure the public fields, then call `render()`.
 
 #### Public settings
 
@@ -291,7 +349,7 @@ threads. Configure the public fields, then call `render()`.
 | `color ray_color(const ray& r, int depth, const hittable& world) const` | Recursively traces a ray; returns sky gradient on a miss |
 | `vector3 sample_square() const` | Random offset in [-0.5, 0.5]^2 within a pixel |
 | `point3 defocus_disk_sample() const` | Random ray origin on the lens disk |
-| `ray get_ray(int i, int j) const` | Jittered ray for pixel (row i, column j) from the lens |
+| `ray get_ray(int i, int j) const` | Jittered ray for pixel (row i, column j) from the lens, at a random time in [0, 1) |
 
 ---
 

@@ -8,6 +8,7 @@ class ray {
 private:
     point3 orig;   // Starting point of the ray
     vector3 dir;   // Direction of the ray (not necessarily unit length)
+    double tm = 0; // Moment in time the ray exists at, used for motion blur
 
 public:
     /*
@@ -18,10 +19,16 @@ public:
     ray() = default;
 
     /*
-     * Creates a ray starting at origin and travelling along direction.
+     * Creates a ray starting at origin and travelling along direction at the given time.
+     */
+    ray(const point3& origin, const vector3& direction, double time)
+        : orig(origin), dir(direction), tm(time) {}
+
+    /*
+     * Creates a ray starting at origin and travelling along direction at time 0.
      */
     ray(const point3& origin, const vector3& direction)
-        : orig(origin), dir(direction) {}
+        : ray(origin, direction, 0) {}
 
     /*
      * Returns the ray's starting point.
@@ -35,6 +42,13 @@ public:
      */
     const vector3& direction() const {
         return dir;
+    }
+
+    /*
+     * Returns the moment in time the ray exists at.
+     */
+    double time() const {
+        return tm;
     }
 
     /*

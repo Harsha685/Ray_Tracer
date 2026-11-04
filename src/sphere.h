@@ -4,17 +4,34 @@
 #include "common.h"
 #include "hittable.h"
 #include "material.h"
-
 // A sphere defined by a center, a radius, and the material of its surface.
 class sphere : public hittable {
 public:
     /*
-     * Creates a sphere with the given center, radius and material.
+     * Creates a stationary sphere with the given center, radius and material.
      *
      *  - A negative radius makes no sense, so it is clamped to 0 with std::fmax.
      */
-    sphere(const point3& center, double radius, shared_ptr<material> mat)
-        : center(center), radius(std::fmax(0, radius)), mat(mat) {}
+    sphere(const point3& static_center, double radius, shared_ptr<material> mat)
+        : center(static_center, vector3(0, 0, 0)), radius(std::fmax(0, radius)), mat(mat) {
+            auto rvec = vector3(radius, radius, radius);
+            bound_box = aabb(static_center - rvec, static_center + rvec);
+        }
+
+    /*
+     * Creates a moving sphere whose center travels from center1 at time 0 to center2
+     * at time 1.
+     */
+    sphere(const point3& center1, const point3& center2, double radius,
+           shared_ptr<material> mat)
+        : center(center1, center2 - center1), radius(std::fmax(0, radius)), mat(mat)
+    {
+        // Box must enclose the sphere at both ends of its motion
+        auto rvec = vector3(radius, radius, radius);
+        aabb box1(center.at(0) - rvec, center.at(0) + rvec);
+        aabb box2(center.at(1) - rvec, center.at(1) + rvec);
+        bound_box = aabb(box1, box2);
+    }
 
     /*
      * Tests whether ray r hits this sphere at some t strictly inside ray_t.
@@ -30,7 +47,8 @@ public:
     bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
         // 1. Calculate oc, a, h, and c
         // Solves the quadratic a*t^2 - 2h*t + c = 0 for where the ray meets the sphere
-        vector3 oc = center - r.origin();                // Vector from ray origin to sphere center
+        point3 current_center = center.at(r.time());     // Where the sphere is at the ray's time
+        vector3 oc = current_center - r.origin();        // Vector from ray origin to sphere center
         auto a = r.direction().length_squared();         // Quadratic 'a' coefficient
         auto h = dot(r.direction(), oc);                 // Half of the quadratic 'b' coefficient (b = -2h)
         auto c = oc.length_squared() - radius * radius;  // Quadratic 'c' coefficient
@@ -54,18 +72,36 @@ public:
         // 5. Fill the hit record
         rec.t = root;
         rec.point = r.at(rec.t);
-        vector3 outward_normal = (rec.point - center) / radius;  // Dividing by radius makes it unit length
+        vector3 outward_normal = (rec.point - current_center) / radius;  // Dividing by radius makes it unit length
         rec.set_face_normal(r, outward_normal);
+        get_sphere_uv(outward_normal, rec.u, rec.v);  // The unit outward normal is the hit point on a unit sphere
         rec.mat = mat.get();  // Plain pointer: copying it costs nothing, unlike a shared_ptr
 
         // 6. Report a successful hit
         return true;
     }
 
+    aabb bounding_box() const override { return bound_box; }
+
 private:
-    point3 center;              // Center of the sphere in world space
+    ray center;                 // Center path: center.at(time) is the center at that time
     double radius;              // Radius, never negative
     shared_ptr<material> mat;   // Surface material, shared with any other object using it
+    aabb bound_box;                  // Box enclosing the sphere over its whole motion
+    static void get_sphere_uv(const point3& p, double& u, double& v) {
+        // p: a given point on the sphere of radius one, centered at the origin.
+        // u: returned value [0,1] of angle around the Y axis from X=-1.
+        // v: returned value [0,1] of angle from Y=-1 to Y=+1.
+        //     <1 0 0> yields <0.50 0.50>       <-1  0  0> yields <0.00 0.50>
+        //     <0 1 0> yields <0.50 1.00>       < 0 -1  0> yields <0.50 0.00>
+        //     <0 0 1> yields <0.25 0.50>       < 0  0 -1> yields <0.75 0.50>
+
+        auto theta = std::acos(-p.y());
+        auto phi = std::atan2(-p.z(), p.x()) + pi;
+
+        u = phi / (2*pi);
+        v = theta / pi;
+    }
 };
 
 #endif // SPHERE_H

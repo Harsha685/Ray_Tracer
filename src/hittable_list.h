@@ -26,6 +26,7 @@ public:
      */
     void clear() {
         objects.clear();
+        bound_box = aabb();
     }
 
     /*
@@ -36,6 +37,7 @@ public:
      */
     void add(shared_ptr<hittable> obj) {
         objects.push_back(obj);
+        bound_box = aabb(bound_box, obj->bounding_box());
     }
 
     /*
@@ -60,6 +62,11 @@ public:
         }
         return hit_any;
     }
+
+    aabb bounding_box() const override { return bound_box; }
+
+private:
+    aabb bound_box;  // Box enclosing every object in the list
 };
 
 #endif // HITTABLE_LIST_H

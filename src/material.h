@@ -1,7 +1,9 @@
 #ifndef MATERIAL_H
 #define MATERIAL_H
 
+#include "color.h"
 #include "hittable.h"
+#include "texture.h"
 
 // Abstract base class describing how a surface responds to an incoming ray.
 class material {
@@ -11,6 +13,14 @@ public:
      * shared_ptr<material>.
      */
     virtual ~material() = default;
+
+    /*
+     * Light given off by the surface at texture coordinates (u, v) / point p.
+     * Most materials emit nothing, so the default is black.
+     */
+    virtual color emitted(double /*u*/, double /*v*/, const point3& /*p*/) const {
+        return color(0, 0, 0);
+    }
 
     /*
      * Decides what happens to ray r_in when it hits the surface described by rec.
@@ -33,7 +43,12 @@ public:
      * Creates a diffuse material with the given albedo (fraction of light reflected
      * per color channel).
      */
-    lambertian(const color& albedo) : albedo(albedo) {}
+    lambertian(const color& albedo) : tex(make_shared<Solid_color>(albedo)) {}
+
+    /*
+     * Creates a diffuse material whose albedo varies across the surface.
+     */
+    lambertian(shared_ptr<Texture> tex) : tex(tex) {}
 
     /*
      * Scatters the ray in a random direction biased toward the surface normal.
@@ -42,22 +57,22 @@ public:
      *    (Lambertian) distribution.
      *  - If the random vector almost cancels the normal, the direction would be near
      *    zero and cause NaNs later, so the normal is used instead.
-     *  - Always scatters; attenuation is the albedo.
+     *  - Always scatters; attenuation is the texture's color at the hit point.
      */
-    bool scatter(const ray& /*r_in*/, const hit_record& rec,
+    bool scatter(const ray& r_in, const hit_record& rec,
                  color& attenuation, ray& scattered) const override {
         auto scatter_direction = rec.normal + random_unit_vector();
 
         if (scatter_direction.near_zero())
             scatter_direction = rec.normal;
 
-        scattered = ray(rec.point, scatter_direction);
-        attenuation = albedo;
+        scattered = ray(rec.point, scatter_direction, r_in.time());
+        attenuation = tex->value(rec.u, rec.v, rec.point);
         return true;
     }
 
 private:
-    color albedo;   // Fraction of light reflected per color channel
+    shared_ptr<Texture> tex;   // Fraction of light reflected per color channel, by position
 };
 
 // Reflective surface, optionally blurred by a fuzz factor.
@@ -83,7 +98,7 @@ public:
                  color& attenuation, ray& scattered) const override {
         vector3 reflected = reflect(r_in.direction(), rec.normal);
         reflected = unit_vector(reflected) + (fuzz * random_unit_vector());
-        scattered = ray(rec.point, reflected);
+        scattered = ray(rec.point, reflected, r_in.time());
         attenuation = albedo;
         return (dot(scattered.direction(), rec.normal) > 0);
     }
@@ -133,7 +148,7 @@ public:
         else
             direction = refract(unit_direction, rec.normal, ri);
 
-        scattered = ray(rec.point, direction);
+        scattered = ray(rec.point, direction, r_in.time());
         return true;
     }
 
@@ -152,6 +167,21 @@ private:
         r0 = r0 * r0;
         return r0 + (1 - r0) * std::pow((1 - cosine), 5);
     }
+};
+
+// Light-emitting surface. Emits its texture's color and never scatters (inherits the
+// default scatter(), which absorbs every incoming ray).
+class diffuse_light : public material {
+    public:
+        diffuse_light(shared_ptr<Texture> tex) : tex(tex) {}
+        diffuse_light(const color& emit) : tex(make_shared<Solid_color>(emit)) {}
+
+        color emitted(double u, double v, const point3& p) const override {
+            return tex->value(u, v, p);
+        }
+
+    private:
+        shared_ptr<Texture> tex;
 };
 
 #endif // MATERIAL_H

@@ -24,6 +24,8 @@ follows the book directly lives on [`main`](https://github.com/Harsha685/Ray_Tra
     Schlick reflectance
 - Positionable camera (`lookfrom`, `lookat`, `vup`, adjustable field of view)
 - Defocus blur (depth of field) via a thin-lens model
+- Motion blur: rays carry a random time in [0, 1) and spheres can move linearly
+  between two centers over that interval
 - Multithreaded rendering with `std::thread`: rows are handed out through an
   atomic counter, and each thread has its own random number generator
 
@@ -123,6 +125,8 @@ raytracer/
 │   ├── hittable.h       # hit_record and the abstract hittable class
 │   ├── hittable_list.h  # a list of hittables treated as one object
 │   ├── sphere.h         # ray-sphere intersection
+│   ├── texture.h        # solid color, checker, image and noise textures
+│   ├── perlin.h         # Perlin noise and turbulence
 │   ├── material.h       # lambertian, metal and dielectric materials
 │   ├── camera.h         # camera setup, ray generation and the multithreaded render loop
 │   ├── main.cpp         # scene setup (book 1 final scene)

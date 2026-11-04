@@ -2,6 +2,7 @@
 #define CAMERA_H
 
 #include "common.h"
+#include "color.h"
 #include "hittable.h"
 #include "material.h"
 
@@ -14,6 +15,9 @@ public:
     int samples_per_pixel = 10;         // Random rays averaged per pixel (antialiasing)
     int max_depth = 10;                 // Maximum number of bounces a ray may make before we give up on it
     int thread_count = 0;               // Render threads to run; 0 = one per logical CPU core
+
+    bool use_sky = true;                // Rays that miss everything see the sky gradient (true) or background (false)
+    color background = color(0, 0, 0); // Scene background color when use_sky is false
 
     double vfov = 90;                   // Vertical view angle (field of view), in degrees
     point3 lookfrom = point3(0, 0, 0);  // Point camera is looking from
@@ -175,14 +179,15 @@ private:
      *  - If the ray hits an object, the object's material decides what happens:
      *    scatter() returns the bounced ray and its attenuation, and the result is
      *    attenuation times whatever the bounced ray sees.
-     *  - If the material absorbs the ray, the result is black.
+     *  - Every hit also adds whatever light the material emits (black for non-lights).
+     *  - If the material absorbs the ray (e.g. a diffuse_light), only its emission is returned.
      *  - depth is the number of bounces still allowed. Each bounce passes depth - 1;
      *    at 0 the function returns black. Without this limit a ray trapped between
      *    surfaces would recurse forever and overflow the stack.
      *  - Hits closer than t = 0.001 are ignored so floating-point error cannot make a
      *    ray hit the surface it starts on (shadow acne).
-     *  - If the ray hits nothing it escapes to the sky: a vertical gradient from white
-     *    (looking down) to light blue (looking up).
+     *  - If the ray hits nothing it escapes: with use_sky it sees a vertical gradient
+     *    from white (looking down) to light blue (looking up), otherwise background.
      */
     color ray_color(const ray& r, int depth, const hittable& world) const {
         if (depth <= 0)
@@ -190,19 +195,28 @@ private:
 
         hit_record rec;
 
-        if (world.hit(r, interval(0.001, infinity), rec)) {
-            ray scattered;
-            color attenuation;
-            if (rec.mat->scatter(r, rec, attenuation, scattered))
-                return attenuation * ray_color(scattered, depth - 1, world);
-            return color(0, 0, 0);
+        // Ray escapes the scene: it sees either the sky gradient or the flat background
+        if (!world.hit(r, interval(0.001, infinity), rec)) {
+            if (!use_sky)
+                return background;
+
+            vector3 unit_direction = unit_vector(r.direction());
+            auto a = 0.5 * (unit_direction.y() + 1.0);  // Blend factor: ray's y mapped from [-1, 1] to [0, 1]
+
+            // Sky gradient: white at the bottom (a = 0) to light blue (0.5, 0.7, 1.0) at the top (a = 1)
+            return (1.0 - a) * color(1.0, 1.0, 1.0) + a * color(0.5, 0.7, 1.0);
         }
 
-        vector3 unit_direction = unit_vector(r.direction());
-        auto a = 0.5 * (unit_direction.y() + 1.0);  // Blend factor: ray's y mapped from [-1, 1] to [0, 1]
+        ray scattered;
+        color attenuation;
+        color color_from_emission = rec.mat->emitted(rec.u, rec.v, rec.point);
 
-        // Sky gradient: white at the bottom (a = 0) to light blue (0.5, 0.7, 1.0) at the top (a = 1)
-        return (1.0 - a) * color(1.0, 1.0, 1.0) + a * color(0.5, 0.7, 1.0);
+        // Lights (and other absorbing materials) contribute only what they emit
+        if (!rec.mat->scatter(r, rec, attenuation, scattered))
+            return color_from_emission;
+
+        color color_from_scatter = attenuation * ray_color(scattered, depth - 1, world);
+        return color_from_emission + color_from_scatter;
     }
 
     /*
@@ -251,7 +265,8 @@ private:
         auto ray_origin = (defocus_angle <= 0) ? center : defocus_disk_sample();
         auto ray_direction = pixel_sample - ray_origin;
 
-        return ray(ray_origin, ray_direction);
+        auto ray_time = random_double();
+        return ray(ray_origin, ray_direction, ray_time);
     }
 };
 

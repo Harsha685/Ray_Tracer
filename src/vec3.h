@@ -3,7 +3,6 @@
 
 #include <cmath>
 #include <iostream>
-#include "common.h"
 
 // A 3-component vector of doubles, used for points, directions, and colors.
 class vector3 {
