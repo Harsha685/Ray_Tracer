@@ -31,8 +31,9 @@ int main() {
     world.add(make_shared<sphere>(point3(-0.9, 0.4, 1.8), 0.4, red));
     world.add(make_shared<sphere>(point3(1.0, 0.35, 2.1), 0.35, blue));
 
-    // Quad: corner Q, edge u, edge v, material (a backdrop panel behind the spheres)
-    world.add(make_shared<quad>(point3(-3.5, 0, -2.5), vector3(7, 0, 0), vector3(0, 3.5, 0), teal));
+    // Box: two opposite corners, material (a small cube in the front-right, offset from the
+    // camera so its front, top and left faces are all visible)
+    world.add(box(point3(2.3, 0, 1.4), point3(3.1, 0.8, 2.2), teal));
 
 
     // Camera
